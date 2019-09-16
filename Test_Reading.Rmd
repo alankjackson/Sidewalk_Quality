@@ -1,0 +1,27 @@
+---
+title: "Test Reading Photos"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(exifr)
+library(dplyr)
+library(leaflet)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r List files and read them in}
+
+files <- list.files(path="Photos", pattern = "*.jpg")
+dat <- read_exif(paste0("Photos/",files))
+
+dat2 <- select(dat,
+	SourceFile, DateTimeOriginal,
+	GPSLongitude, GPSLatitude, GPSPosition,
+	GPSDateStamp)
+
+plot(dat$GPSLongitude, dat$GPSLatitude)
+
+```
+
