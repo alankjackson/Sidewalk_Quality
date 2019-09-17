@@ -5,7 +5,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 library(exifr)
-library(dplyr)
+library(tidyverse)
 library(leaflet)
 
 knitr::opts_chunk$set(echo = TRUE)
@@ -16,12 +16,26 @@ knitr::opts_chunk$set(echo = TRUE)
 files <- list.files(path="Photos", pattern = "*.jpg")
 dat <- read_exif(paste0("Photos/",files))
 
+Conditions <- c("Good", "Bushes",  "Offset", "Shattered", "Gravel", "No Curb Cut", "Missing")
+
 dat2 <- select(dat,
 	SourceFile, DateTimeOriginal,
-	GPSLongitude, GPSLatitude, GPSPosition,
+	GPSLongitude, GPSLatitude, 
 	GPSDateStamp)
 
+dat2$Condition <- c("Missing", "Missing", "Shattered", "Missing")
+
+dat2 <- dat2 %>% 
+  mutate(Condition=factor(Condition, levels=Conditions))
+
 plot(dat$GPSLongitude, dat$GPSLatitude)
+
+factpal <- colorFactor(topo.colors(7), dat2$Condition)
+
+leaflet(dat2) %>%
+addProviderTiles("Esri.WorldImagery") %>%
+addMarkers(~ GPSLongitude, ~ GPSLatitude, 
+           popup=~ Condition)
 
 ```
 
