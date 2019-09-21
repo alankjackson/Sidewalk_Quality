@@ -39,11 +39,14 @@ dat2 <- select(dat,
 
 #       Is there an old tibble?
 
+print("--1--")
 oldfile <- paste0(savepath, "/Photos.rds")
 if (file.exists(oldfile)){
+print("--2--")
     OldDF <- readRDS(oldfile)
     } else 
 {
+print("--3--")
     OldDF <- tibble(SourceFile=character(),
                     DateTimeOriginal=character(),
                     GPSLongitude=numeric(),
@@ -60,7 +63,7 @@ OldDF <- bind_rows(OldDF, dat2)
 image_number <- 0 # initialize
 
 ##################################################
-# Define UI for displaying and annotaing photos
+# Define UI for displaying and annotating photos
 ##################################################
 
 # Demo of clicking, hovering, brushing with imageOutput
@@ -106,6 +109,12 @@ shinyApp(
             )
         )
     ),
+    
+#####################################################
+# Define Server for displaying and annotating photos
+#####################################################
+
+
     server = function(input, output, session) {
         
         #   Size of images from phone is 4032x3024
@@ -177,11 +186,19 @@ shinyApp(
             print(paste("Direction = ", input$direction))
             
             mask <- OldDF$SourceFile==dat2$SourceFile[counter$image_number]
-            OldDF$Quality[mask] <- input$quality
-            OldDF$Length[mask] <- input$length
-            OldDF$Direction[mask] <- input$direction
+            OldDF$Quality[mask] <<- input$quality
+            OldDF$Length[mask] <<- input$length
+            OldDF$Direction[mask] <<- input$direction
+            
+            print(OldDF)
             
             saveRDS(OldDF, oldfile)
+            
+            #       Reset to defaults
+            updateRadioButtons(session, "quality", selected = "Good")
+            updateNumericInput(session, "length", value = 50)
+            updateRadioButtons(session, "direction", selected = "N")
+            
             
             #   Crop image and write out
             
