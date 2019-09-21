@@ -5,8 +5,8 @@
 #
 #       Read photos taken with phone from RawPhotos directory,
 #       Scale to 1/8 original resolution
-#       Crop to intersting area, rotate if needed
-#       Add labels for sidewalk quality, distance label applies,
+#       Crop to interesting area, rotate if needed
+#       Add labels for sidewalk quality, distance that label applies,
 #       and direction camera was pointed.
 #       Output cropped and shrunk photo to Photos directory
 #       Update tibble with annotation
@@ -82,10 +82,18 @@ shinyApp(
                                brush = brushOpts(id = "brush")
                    ),
 
+                    HTML("<hr>"),
                       actionButton("Prev", "Prev"),
                       actionButton("Next", "Next"),
                       actionButton("Rotate", "Rotate"),
-                      actionButton("Save", "Save")
+                      actionButton("Save", "Save"),
+                   HTML("<hr>"),
+                   
+                   #        Add map
+                   
+                   m <- leaflet() %>%
+                       setView(lng = -95.398360 , lat = 29.798804, zoom = 17) %>% 
+                       addTiles() 
             ),
             column(width = 2,
                    #    Quality, Length, and Direction
@@ -117,15 +125,15 @@ shinyApp(
 
     server = function(input, output, session) {
         
-        #   Size of images from phone is 4032x3024
+            #   Size of images from phone is 4032x3024
         #   Function to prep image
+        #   want height to be 378
         imagefile <- reactiveValues(tmpfile = "tmp")
-        image_prep <- function(image_file, rotate=0){
+        image_prep <- function(image_file){
             image <- image_read(image_file)
             tmp <- renderImage({
                 imagefile$tmpfile <- image %>% 
-                    image_scale(504) %>%
-                    image_rotate(rotate) %>% 
+                    image_scale("x378") %>%
                     image_write(tempfile(fileext='.jpg'), format = 'jpg')
                 # Return a list containing the filename
                 list(src = imagefile$tmpfile,  contentType = "image/jpeg")
@@ -167,6 +175,7 @@ shinyApp(
             output$image <- renderImage({
                 imagefile$tmpfile <- image %>% 
                     image_rotate(90) %>% 
+                    image_resize("x378") %>%
                     image_write(tempfile(fileext='.jpg'), format = 'jpg')
                 # Return a list containing the filename
                 list(src = imagefile$tmpfile,  contentType = "image/jpeg")
