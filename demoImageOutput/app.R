@@ -10,6 +10,7 @@
 #       and direction camera was pointed.
 #       Output cropped and shrunk photo to Photos directory
 #       Update tibble with annotation
+#       Show active photo location on map
 #
 
 library(shiny)
@@ -39,14 +40,11 @@ dat2 <- select(dat,
 
 #       Is there an old tibble?
 
-print("--1--")
 oldfile <- paste0(savepath, "/Photos.rds")
 if (file.exists(oldfile)){
-print("--2--")
     OldDF <- readRDS(oldfile)
     } else 
 {
-print("--3--")
     OldDF <- tibble(SourceFile=character(),
                     DateTimeOriginal=character(),
                     GPSLongitude=numeric(),
@@ -91,10 +89,10 @@ shinyApp(
                    
                    #        Add map
                    
-                   m <- leaflet() %>%
-                       setView(lng = -95.398360 , lat = 29.798804, zoom = 17) %>% 
-                       addTiles() 
+                   leafletOutput("LocalMap")
             ),
+            
+            #       Add left column with controls for labeling
             column(width = 2,
                    #    Quality, Length, and Direction
                    radioButtons("quality", label = "Sidewalk quality",
@@ -106,7 +104,7 @@ shinyApp(
                                                "Missing"="Missing"),
                                 selected = "Good"),
                    numericInput("length", "Estimated length in feet",
-                               min = 0, max = 250, step=5,
+                               min = 0, max = 500, step=5,
                                value = 50, width = '100px'),
                    radioButtons("direction", label = "Viewing direction",
                                 choices = list("N" = "N", "E" = "E",
@@ -141,16 +139,72 @@ shinyApp(
             return(tmp)
         }
         
+        #   Draw map - show marker at lat/long, and draw line of proper length
+        #   and direction as chosen
+        #   Use approximation of 1 degree = 340,000 feet
+        draw_map <- function(i, len, dir){
+            lat <- OldDF$GPSLatitude[i]
+            lon <- OldDF$GPSLongitude[i]
+            latlon <- len/340000. # distance in lat long space
+            newcoord <- case_when(
+                dir == "N" ~ list(lat+latlon, lon),
+                dir == "S" ~ list(lat-latlon, lon),
+                dir == "E" ~ list(lat, lon+latlon),
+                dir == "W" ~ list(lat, lon-latlon),
+                dir == "NE" ~ list(lat+latlon*0.707, lon+latlon*0.707),
+                dir == "NW" ~ list(lat+latlon*0.707, lon-latlon*0.707),
+                dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
+                dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
+            )
+            tmpdf <- tribble(~grp, ~lon, ~lat,
+                             "A",  lon, lat,
+                             "A",  newcoord[[2]], newcoord[[1]])
+            output$LocalMap <- renderLeaflet({
+                leaflet() %>%
+                       setView(lng = lon , lat = lat, zoom = 20) %>% 
+                       addTiles() %>%
+                       addMarkers(lon, lat) %>% 
+                       addPolylines(data = tmpdf, lng = ~lon, lat = ~lat)
+            })
+        }
+        
+        #       Reset controls - for when new image appears
+        
+        resetControls <- function(){
+            session$resetBrush("brush")
+            brush <<- NULL
+            updateRadioButtons(session, "quality", selected = "Good")
+            updateNumericInput(session, "length", value = 50)
+            updateRadioButtons(session, "direction", selected = "N")
+        }
+        
+        ##############
+        ### length ###
+        ##############
+        observeEvent(input$length, {
+            draw_map(counter$image_number, input$length, input$direction)
+         }, ignoreNULL=FALSE)
+        
+        #################
+        ### direction ###
+        #################
+        observeEvent(input$direction, {
+            draw_map(counter$image_number, input$length, input$direction)
+         }, ignoreNULL=FALSE)
+        
+        
+        
+        # Defining & initializing the reactiveValues object
+        counter <- reactiveValues(image_number = 0) 
+        
         ###################
         ### Next button ###
         ###################
-        # Defining & initializing the reactiveValues object
-        counter <- reactiveValues(image_number = 0) 
         observeEvent(input$Next, {
-            session$resetBrush("brush")
-            brush <<- NULL
+            resetControls()
             counter$image_number <- min(length(image_list), counter$image_number+1)
             output$image <- image_prep(image_list[counter$image_number])
+            draw_map(counter$image_number, input$length, input$direction)
          }, ignoreNULL=FALSE)
         
         
@@ -158,10 +212,10 @@ shinyApp(
         ### Prev button ###
         ###################
         observeEvent(input$Prev, {
-            session$resetBrush("brush")
-            brush <<- NULL
+            resetControls()
             counter$image_number <- max(1, counter$image_number-1)
             output$image <- image_prep(image_list[counter$image_number])
+            draw_map(counter$image_number, input$length, input$direction)
          }, ignoreNULL=TRUE)
         
         
@@ -180,7 +234,6 @@ shinyApp(
                 # Return a list containing the filename
                 list(src = imagefile$tmpfile,  contentType = "image/jpeg")
               }, deleteFile = FALSE)
-            #output$image <- image_prep(image_list[counter$image_number], 90)
          }, ignoreNULL=TRUE)
         
         ###################
@@ -202,12 +255,6 @@ shinyApp(
             print(OldDF)
             
             saveRDS(OldDF, oldfile)
-            
-            #       Reset to defaults
-            updateRadioButtons(session, "quality", selected = "Good")
-            updateNumericInput(session, "length", value = 50)
-            updateRadioButtons(session, "direction", selected = "N")
-            
             
             #   Crop image and write out
             
@@ -234,8 +281,9 @@ shinyApp(
                             path=paste0(savepath,"/",dat2$SourceFile[counter$image_number]), 
                             format = 'jpg')
             }
-            session$resetBrush("brush")
-            brush <<- NULL
+            #       Reset to defaults
+            resetControls()
+            
          }, ignoreNULL=TRUE)
     }
 )
