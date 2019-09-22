@@ -163,7 +163,8 @@ shinyApp(
                 leaflet() %>%
                        setView(lng = lon , lat = lat, zoom = 20) %>% 
                        addTiles() %>%
-                       addMarkers(lon, lat) %>% 
+                       addCircleMarkers(lon, lat,
+                                        radius=3, opacity=1, color="#000000") %>% 
                        addPolylines(data = tmpdf, lng = ~lon, lat = ~lat)
             })
         }
