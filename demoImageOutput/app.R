@@ -18,6 +18,7 @@ library(tidyverse)
 library(purrr)
 library(exifr)
 library(magick)
+library(leaflet)
 
 ###################################
 #   get and set up the basic data
@@ -36,7 +37,8 @@ dat2 <- select(dat,
                SourceFile, DateTimeOriginal,
                GPSLongitude, GPSLatitude) %>% 
     mutate(SourceFile=str_extract(SourceFile, "[A-Z0-9_]*.jpg$")) %>% # just filename
-    mutate(Quality="Not Set", Length=0, Direction="Not Set")
+    mutate(Quality="Not Set", Length=0, Direction="Not Set") %>% 
+    mutate(EndLon=GPSLongitude, EndLat=GPSLatitude)
 
 #       Is there an old tibble?
 
@@ -51,12 +53,16 @@ if (file.exists(oldfile)){
                     GPSLatitude=numeric(),
                     Quality=character(),
                     Length=numeric(),
-                    Direction=character())
+                    Direction=character(),
+                    EndLon=numeric(),
+                    EndLat=numeric())
 }
 
 #   Join new data to old file
 
 OldDF <- bind_rows(OldDF, dat2)
+
+print(OldDF)
     
 image_number <- 0 # initialize
 
@@ -99,6 +105,8 @@ shinyApp(
                                 choices = list("Good"="Good", "Bushes"="Bushes", 
                                                "Gap"="Gap",  "Offset"="Offset", 
                                                "Shattered"="Shattered", 
+                                               "Obstructed"="Obstructed", 
+                                               "Debris/Mud"="Debris/Mud", 
                                                "Gravel"="Gravel", 
                                                "No Curb Cut"="No Curb Cut", 
                                                "Missing"="Missing"),
@@ -156,16 +164,20 @@ shinyApp(
                 dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
                 dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
             )
-            tmpdf <- tribble(~grp, ~lon, ~lat,
-                             "A",  lon, lat,
-                             "A",  newcoord[[2]], newcoord[[1]])
+            #tmpdf <- tribble(~grp, ~lon, ~lat,
+             #                "A",  lon, lat,
+              #               "A",  newcoord[[2]], newcoord[[1]])
+            OldDF$EndLon[i] <- newcoord[[2]]
+            OldDF$EndLat[i] <- newcoord[[1]]
+            LonLine <- c(lon, newcoord[[2]])
+            LatLine <- c(lat, newcoord[[1]])
             output$LocalMap <- renderLeaflet({
                 leaflet() %>%
                        setView(lng = lon , lat = lat, zoom = 20) %>% 
                        addTiles() %>%
                        addCircleMarkers(lon, lat,
                                         radius=3, opacity=1, color="#000000") %>% 
-                       addPolylines(data = tmpdf, lng = ~lon, lat = ~lat)
+                       addPolylines(lng = LonLine, lat = LatLine)
             })
         }
         
