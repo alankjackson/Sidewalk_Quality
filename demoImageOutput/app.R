@@ -266,8 +266,6 @@ shinyApp(
                 ))
             }
             else {
-                print("-----   got here ------")
-                
                 mask <- OldDF$SourceFile==dat2$SourceFile[counter$image_number]
                 OldDF$Quality[mask] <<- input$quality
                 OldDF$Length[mask] <<- input$length
