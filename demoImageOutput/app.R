@@ -151,8 +151,10 @@ shinyApp(
         #   and direction as chosen
         #   Use approximation of 1 degree = 340,000 feet
         draw_map <- function(i, len, dir){
-            lat <- OldDF$GPSLatitude[i]
-            lon <- OldDF$GPSLongitude[i]
+            #lat <- OldDF$GPSLatitude[i]
+            #lon <- OldDF$GPSLongitude[i]
+            lat <- dat2$GPSLatitude[i]
+            lon <- dat2$GPSLongitude[i]
             latlon <- len/340000. # distance in lat long space
             newcoord <- case_when(
                 dir == "N" ~ list(lat+latlon, lon),
@@ -164,11 +166,8 @@ shinyApp(
                 dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
                 dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
             )
-            #tmpdf <- tribble(~grp, ~lon, ~lat,
-             #                "A",  lon, lat,
-              #               "A",  newcoord[[2]], newcoord[[1]])
-            OldDF$EndLon[i] <<- newcoord[[2]]
-            OldDF$EndLat[i] <<- newcoord[[1]]
+            dat2$EndLon[i] <<- newcoord[[2]]
+            dat2$EndLat[i] <<- newcoord[[1]]
             LonLine <- c(lon, newcoord[[2]])
             LatLine <- c(lat, newcoord[[1]])
             output$LocalMap <- renderLeaflet({
@@ -264,6 +263,8 @@ shinyApp(
             OldDF$Quality[mask] <<- input$quality
             OldDF$Length[mask] <<- input$length
             OldDF$Direction[mask] <<- input$direction
+            OldDF$EndLon[mask] <<- dat2$EndLon[counter$image_number]
+            OldDF$EndLat[mask] <<- dat2$EndLat[counter$image_number]
             
             print(OldDF)
             
