@@ -132,7 +132,7 @@ shinyApp(
 
     server = function(input, output, session) {
         
-            #   Size of images from phone is 4032x3024
+        #   Size of images from phone is 4032x3024
         #   Function to prep image
         #   want height to be 378
         imagefile <- reactiveValues(tmpfile = "tmp")
@@ -152,8 +152,6 @@ shinyApp(
         #   and direction as chosen
         #   Use approximation of 1 degree = 340,000 feet
         draw_map <- function(i, len, dir){
-            #lat <- OldDF$GPSLatitude[i]
-            #lon <- OldDF$GPSLongitude[i]
             lat <- dat2$GPSLatitude[i]
             lon <- dat2$GPSLongitude[i]
             latlon <- len/340000. # distance in lat long space
