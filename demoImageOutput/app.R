@@ -167,8 +167,8 @@ shinyApp(
             #tmpdf <- tribble(~grp, ~lon, ~lat,
              #                "A",  lon, lat,
               #               "A",  newcoord[[2]], newcoord[[1]])
-            OldDF$EndLon[i] <- newcoord[[2]]
-            OldDF$EndLat[i] <- newcoord[[1]]
+            OldDF$EndLon[i] <<- newcoord[[2]]
+            OldDF$EndLat[i] <<- newcoord[[1]]
             LonLine <- c(lon, newcoord[[2]])
             LatLine <- c(lat, newcoord[[1]])
             output$LocalMap <- renderLeaflet({
