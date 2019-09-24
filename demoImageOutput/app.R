@@ -102,7 +102,8 @@ shinyApp(
             column(width = 2,
                    #    Quality, Length, and Direction
                    radioButtons("quality", label = "Sidewalk quality",
-                                choices = list("Good"="Good", "Bushes"="Bushes", 
+                                choices = list("None selected" = "",
+                                               "Good"="Good", "Bushes"="Bushes", 
                                                "Gap"="Gap",  "Offset"="Offset", 
                                                "Shattered"="Shattered", 
                                                "Obstructed"="Obstructed", 
@@ -110,7 +111,7 @@ shinyApp(
                                                "Gravel"="Gravel", 
                                                "No Curb Cut"="No Curb Cut", 
                                                "Missing"="Missing"),
-                                selected = "Good"),
+                                ),
                    numericInput("length", "Estimated length in feet",
                                min = 0, max = 500, step=5,
                                value = 50, width = '100px'),
@@ -185,7 +186,7 @@ shinyApp(
         resetControls <- function(){
             session$resetBrush("brush")
             brush <<- NULL
-            updateRadioButtons(session, "quality", selected = "Good")
+            updateRadioButtons(session, "quality", selected = "")
             updateNumericInput(session, "length", value = 50)
             updateRadioButtons(session, "direction", selected = "N")
         }
@@ -258,46 +259,54 @@ shinyApp(
             print(paste("Quality = ", input$quality ))
             print(paste("Length = ", input$length))
             print(paste("Direction = ", input$direction))
-            
-            mask <- OldDF$SourceFile==dat2$SourceFile[counter$image_number]
-            OldDF$Quality[mask] <<- input$quality
-            OldDF$Length[mask] <<- input$length
-            OldDF$Direction[mask] <<- input$direction
-            OldDF$EndLon[mask] <<- dat2$EndLon[counter$image_number]
-            OldDF$EndLat[mask] <<- dat2$EndLat[counter$image_number]
-            
-            print(OldDF)
-            
-            saveRDS(OldDF, oldfile)
-            
-            #   Crop image and write out
-            
-            image <- image_read(imagefile$tmpfile)  # current view
-            
-            if(is.null(input$brush)){ # do not crop
-                image %>% 
-                    image_strip() %>%  # remove exif headers
-                    image_write( 
-                            path=paste0(savepath,"/",dat2$SourceFile[counter$image_number]), 
-                            format = 'jpg')
-                }
-            else { # Crop image
-                geom <- 
-                    geometry_area(width=input$brush$coords_img$xmax-input$brush$coords_img$xmin,
-                              height=input$brush$coords_img$ymax-input$brush$coords_img$ymin,
-                              x_off=input$brush$coords_img$xmin,
-                              y_off=input$brush$coords_img$ymin
-                              )
-                image %>% 
-                    image_strip() %>%  # remove exif headers
-                    image_crop(geometry=geom) %>% # crop to selected area
-                    image_write( 
-                            path=paste0(savepath,"/",dat2$SourceFile[counter$image_number]), 
-                            format = 'jpg')
+            if (input$quality==""){
+                showModal(modalDialog(
+                    title = "Error",
+                    "Choose a Quality label."
+                ))
             }
-            #       Reset to defaults
-            resetControls()
-            
+            else {
+                print("-----   got here ------")
+                
+                mask <- OldDF$SourceFile==dat2$SourceFile[counter$image_number]
+                OldDF$Quality[mask] <<- input$quality
+                OldDF$Length[mask] <<- input$length
+                OldDF$Direction[mask] <<- input$direction
+                OldDF$EndLon[mask] <<- dat2$EndLon[counter$image_number]
+                OldDF$EndLat[mask] <<- dat2$EndLat[counter$image_number]
+                
+                print(OldDF)
+                
+                saveRDS(OldDF, oldfile)
+                
+                #   Crop image and write out
+                
+                image <- image_read(imagefile$tmpfile)  # current view
+                
+                if(is.null(input$brush)){ # do not crop
+                    image %>% 
+                        image_strip() %>%  # remove exif headers
+                        image_write( 
+                                path=paste0(savepath,"/",dat2$SourceFile[counter$image_number]), 
+                                format = 'jpg')
+                    }
+                else { # Crop image
+                    geom <- 
+                        geometry_area(width=input$brush$coords_img$xmax-input$brush$coords_img$xmin,
+                                  height=input$brush$coords_img$ymax-input$brush$coords_img$ymin,
+                                  x_off=input$brush$coords_img$xmin,
+                                  y_off=input$brush$coords_img$ymin
+                                  )
+                    image %>% 
+                        image_strip() %>%  # remove exif headers
+                        image_crop(geometry=geom) %>% # crop to selected area
+                        image_write( 
+                                path=paste0(savepath,"/",dat2$SourceFile[counter$image_number]), 
+                                format = 'jpg')
+                }
+                #       Reset to defaults
+                resetControls()
+            }   
          }, ignoreNULL=TRUE)
     }
 )
