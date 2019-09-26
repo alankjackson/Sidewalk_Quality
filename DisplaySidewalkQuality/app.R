@@ -4,9 +4,8 @@
 #           Alan Jackson September 2019
 #
 #       Display map of area
-#       Mark locations of photos
 #       Draw colored lines representing sidewalk quality 
-#       Photos accessed by clicking location marks
+#       Photos accessed by clicking colored quality line
 #
 
 library(shiny)
@@ -48,7 +47,7 @@ OldDF$SourceFile <- paste0(DataLocation, OldDF$SourceFile)
 OldDF <- left_join(OldDF, colorDF, by="Quality")
 
 init_zoom <- 15
-init_weight <- 8
+init_weight <- 6
 
 ##################################################
 # Define UI for displaying and annotating photos
@@ -65,19 +64,22 @@ shinyApp(
         column(width = 2,
                #    Quality
                checkboxGroupInput("quality", label = "Sidewalk qualities to display",
-                            choices = list("Good"="Good", "Bushes"="Bushes", 
-                                           "Gap"="Gap",  "Offset"="Offset", 
+                            choices = list("Good"="Good", 
+                                           "Bushes"="Bushes", 
+                                           "Gap"="Gap",  
+                                           "Offset"="Offset", 
                                            "Shattered"="Shattered", 
                                            "Obstructed"="Obstructed", 
                                            "Debris/Mud"="Debris/Mud", 
                                            "Gravel"="Gravel", 
                                            "No Curb Cut"="No Curb Cut", 
                                            "Missing"="Missing"),
-                            selected = "Good"),
-               #    pick what to show
-               checkboxGroupInput("classes", label="Turn elements on/off",
-                                  list("Quality"="qual", "Photo points"="pnts"),
-                                  selected=c("qual","pnts"))
+                            selected = colorDF$Quality),
+               #    Select or unselect all
+                    HTML("<hr>"),
+               actionButton("selectAll", label = "Select All"),
+               actionButton("deselectAll", label = "Deselect All") ,
+                    HTML("<hr>")
           )
         ) # fluidRow
     ), # basicPage
@@ -89,6 +91,9 @@ shinyApp(
     server <- function(input, output, session) {
 
             #       This bit won't change
+        ##################################
+        #           Basemap
+        ##################################
             output$LocalMap <- renderLeaflet({
                 #   Basemap
                 leaflet(OldDF) %>% 
@@ -96,18 +101,15 @@ shinyApp(
                     addTiles()
             }) 
             
+        ##################################
+        #           Lines
+        ##################################
             observe({
                 #   Polylines (done in a loop to keep them from connecting)
-                #print(paste("classes:",input$classes))
-                #print(paste("null?:",is.null(input$classes)))
-                #print(paste("quality:",input$quality))
-                #print(paste("zoom:",input$LocalMap_zoom))
                 #   scale width of lines in concert with zoom scale
                 wgt <- max(2,floor(2*(input$LocalMap_zoom-init_zoom)+0.5) + init_weight)
                 #print(paste("weight:",wgt))
-                if (!is.null(input$classes) & 
-                    !is.null(input$quality) & 
-                    "qual" %in% input$classes[1]){
+                if (!is.null(input$quality)){
                     leafletProxy("LocalMap") %>% 
                     clearShapes()  
                     for (i in 1:nrow(OldDF)){
@@ -118,6 +120,9 @@ shinyApp(
                                  lng=c(OldDF[i,]$GPSLongitude, OldDF[i,]$EndLon),
                                  color=OldDF[i,]$Codes,
                                  weight=wgt,
+                                 popup = popupImage(OldDF[i,]$SourceFile, src="remote",
+                                      height=150,
+                                      width=150),
                                  opacity=1
                               )
                         }
@@ -128,15 +133,27 @@ shinyApp(
                     clearShapes()  
                 }
             })
-                # Markers (put on top so they show up and can be clicked)
-             #   m %>%   addCircleMarkers(~ GPSLongitude, ~ GPSLatitude, 
-             #                      radius=3, opacity=1, color="#999",
-             #                popup = popupImage(OldDF$SourceFile, src="remote",
-             #                                   height=150,
-             #                                   width=150),
-             #                  ) %>% 
-             #                 addTiles()
-             #   
-             #               })
+            
+        ##################################
+        #  Select all and Unselect all
+        ##################################
+        #      Select    
+        observeEvent(input$selectAll, {
+            if (input$selectAll>0){ # don't run on initialization
+                updateCheckboxGroupInput(session = session, 
+                                         inputId = "quality", 
+                                         selected = colorDF$Quality)
+            }
+         }, ignoreNULL=FALSE)
+
+        #      Unselect    
+        observeEvent(input$deselectAll, {
+            if (input$deselectAll>0){ # don't run on initialization
+                updateCheckboxGroupInput(session = session, 
+                                         inputId = "quality", 
+                                         selected = "")
+            }
+         }, ignoreNULL=FALSE)
+            
     }
 )
