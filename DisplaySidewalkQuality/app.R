@@ -7,6 +7,8 @@
 #       Draw colored lines representing sidewalk quality 
 #       Photos accessed by clicking colored quality line
 #
+#       To update remote files, use "weex sidewalks"
+#
 
 library(shiny)
 library(tidyverse)
@@ -24,6 +26,10 @@ DataLocation <- "https://www.ajackson.org/sidewalks/data/"
 #   Tibble database
 
 OldDF <- readRDS(gzcon(url(paste0(DataLocation, "/Photos.rds"))))
+
+#   Sort so that shortest paths plot last to avoid overplotting
+
+OldDF <- OldDF %>% arrange(desc(Length))
 
 #  lng = -95.404606 , lat = 29.797131, zoom = 16
 MapCenter <- c(-95.404606 , 29.797131)
@@ -55,13 +61,14 @@ init_weight <- 6
 
 shinyApp(
     ui = basicPage(
+      titlePanel("Map of Sidewalk Quality in the Heights"),
       fluidRow(
         column(width = 8,
                leafletOutput("LocalMap")
         ),
         
         #       Add right column with controls for display
-        column(width = 2,
+        column(width = 4,
                #    Quality
                checkboxGroupInput("quality", label = "Sidewalk qualities to display",
                             choices = list("Good"="Good", 
@@ -76,6 +83,8 @@ shinyApp(
                                            "Missing"="Missing"),
                             selected = colorDF$Quality),
                #    Select or unselect all
+                    HTML("<hr>"),
+                    tags$em("Click the line segment to see a photo"),
                     HTML("<hr>"),
                actionButton("selectAll", label = "Select All"),
                actionButton("deselectAll", label = "Deselect All") ,
