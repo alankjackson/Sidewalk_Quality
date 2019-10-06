@@ -11,6 +11,8 @@
 #       Output cropped and shrunk photo to Photos directory
 #       Update tibble with annotation
 #       Show active photo location on map
+#	color code checkboxes
+#	https://stackoverflow.com/questions/41813960/how-to-make-the-checkboxgroupinput-color-coded-in-shiny
 #
 
 library(shiny)
@@ -36,6 +38,7 @@ dat <- read_exif(image_list) # Read exif headers into data frame
 dat2 <- select(dat,
                SourceFile, DateTimeOriginal,
                GPSLongitude, GPSLatitude) %>% 
+    arrange(DateTimeOriginal) %>% 
     mutate(SourceFile=str_extract(SourceFile, "[A-Z0-9_]*.jpg$")) %>% # just filename
     mutate(Quality="Not Set", Length=0, Direction="Not Set") %>% 
     mutate(EndLon=GPSLongitude, EndLat=GPSLatitude)
@@ -173,8 +176,10 @@ shinyApp(
                 leaflet() %>%
                        setView(lng = lon , lat = lat, zoom = 20) %>% 
                        addTiles() %>%
-                       addCircleMarkers(lon, lat,
+                       addCircleMarkers(dat2$GPSLongitude, dat2$GPSLatitude,
                                         radius=3, opacity=1, color="#000000") %>% 
+                       addCircleMarkers(lon, lat,
+                                        radius=3, opacity=1, color="#ff0000") %>% 
                        addPolylines(lng = LonLine, lat = LatLine)
             })
         }
