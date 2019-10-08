@@ -14,6 +14,7 @@
 #	color code checkboxes
 #	https://stackoverflow.com/questions/41813960/how-to-make-the-checkboxgroupinput-color-coded-in-shiny
 #
+#       After done, move photos from RawPhotos to Archive
 
 library(shiny)
 library(tidyverse)
@@ -43,6 +44,8 @@ dat2 <- select(dat,
     mutate(Quality="Not Set", Length=0, Direction="Not Set") %>% 
     mutate(EndLon=GPSLongitude, EndLat=GPSLatitude)
 
+image_list <- paste0(rawpath,"/",dat2$SourceFile) # make sure image_list sort same as dat2
+
 #       Is there an old tibble?
 
 oldfile <- paste0(savepath, "/Photos.rds")
@@ -65,9 +68,9 @@ if (file.exists(oldfile)){
 
 OldDF <- bind_rows(OldDF, dat2)
 
-print(OldDF)
-    
 image_number <- 0 # initialize
+#   saved = True if photo has been saved
+saved <- logical(length=nrow(dat2))
 
 ##################################################
 # Define UI for displaying and annotating photos
@@ -88,6 +91,9 @@ shinyApp(
                                ),
                                brush = brushOpts(id = "brush")
                    ),
+                    HTML("<hr>"),
+                    textOutput("SourceFile"),
+                    #textOutput("LatLong"),
 
                     HTML("<hr>"),
                       actionButton("Prev", "Prev"),
@@ -113,7 +119,7 @@ shinyApp(
                                                "Debris/Mud"="Debris/Mud", 
                                                "Gravel"="Gravel", 
                                                "No Curb Cut"="No Curb Cut", 
-                                               "Missing"="Missing"),
+                                               "Missing"="Missing")
                                 ),
                    numericInput("length", "Estimated length in feet",
                                min = 0, max = 500, step=5,
@@ -178,6 +184,8 @@ shinyApp(
                        addTiles() %>%
                        addCircleMarkers(dat2$GPSLongitude, dat2$GPSLatitude,
                                         radius=3, opacity=1, color="#000000") %>% 
+                       addCircleMarkers(dat2[saved,]$GPSLongitude, dat2[saved,]$GPSLatitude,
+                                        radius=3, opacity=1, color="#008000") %>% 
                        addCircleMarkers(lon, lat,
                                         radius=3, opacity=1, color="#ff0000") %>% 
                        addPolylines(lng = LonLine, lat = LatLine)
@@ -191,7 +199,6 @@ shinyApp(
             brush <<- NULL
             updateRadioButtons(session, "quality", selected = "")
             updateNumericInput(session, "length", value = 50)
-            updateRadioButtons(session, "direction", selected = "N")
         }
         
         ##############
@@ -218,9 +225,15 @@ shinyApp(
         ###################
         observeEvent(input$Next, {
             resetControls()
+            if (counter$image_number == length(image_list)){
+              showNotification("Last image in set")
+            }
             counter$image_number <- min(length(image_list), counter$image_number+1)
             output$image <- image_prep(image_list[counter$image_number])
             draw_map(counter$image_number, input$length, input$direction)
+            output$SourceFile <<- renderText(dat2[counter$image_number,]$SourceFile)
+            output$LatLong <<- renderText(paste(dat2[counter$image_number,]$GPSLatitude,",",
+                                          dat2[counter$image_number,]$GPSLongitude))
          }, ignoreNULL=FALSE)
         
         
@@ -229,9 +242,15 @@ shinyApp(
         ###################
         observeEvent(input$Prev, {
             resetControls()
+            if (counter$image_number == 1){
+              showNotification("First image in set")
+            }
             counter$image_number <- max(1, counter$image_number-1)
             output$image <- image_prep(image_list[counter$image_number])
             draw_map(counter$image_number, input$length, input$direction)
+            output$SourceFile <<- renderText(dat2[counter$image_number,]$SourceFile)
+            output$LatLong <<- renderText(paste(dat2[counter$image_number,]$GPSLatitude,",",
+                                          dat2[counter$image_number,]$GPSLongitude))
          }, ignoreNULL=TRUE)
         
         
@@ -256,18 +275,20 @@ shinyApp(
         ### Save button ###
         ###################
         observeEvent(input$Save, {
-            print(paste("Save ", imagefile$tmpfile, "to", dat2$SourceFile[counter$image_number]))
             
             #   Update tibble and save
-            print(paste("Quality = ", input$quality ))
-            print(paste("Length = ", input$length))
-            print(paste("Direction = ", input$direction))
-            if (input$quality==""){
+            
+            if (input$quality==""){ # no quality label chosen
                 showModal(modalDialog(
                     title = "Error",
                     "Choose a Quality label."
                 ))
-            }
+            } else if(is.null(input$brush)){ # you must crop
+                showModal(modalDialog(
+                    title = "Error",
+                    "You must crop image."
+                ))
+              }
             else {
                 mask <- OldDF$SourceFile==dat2$SourceFile[counter$image_number]
                 OldDF$Quality[mask] <<- input$quality
@@ -307,6 +328,14 @@ shinyApp(
                 }
                 #       Reset to defaults
                 resetControls()
+                #       Go to Next
+                saved[counter$image_number] <<- TRUE # flag image as saved
+                counter$image_number <<- min(length(image_list), counter$image_number+1)
+                output$image <- image_prep(image_list[counter$image_number])
+                draw_map(counter$image_number, input$length, input$direction)
+                if (counter$image_number == length(image_list)){
+                  showNotification("Last image in set")
+                }
             }   
          }, ignoreNULL=TRUE)
     }
