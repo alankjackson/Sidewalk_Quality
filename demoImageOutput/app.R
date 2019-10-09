@@ -16,6 +16,12 @@
 #
 #       After done, move photos from RawPhotos to Archive
 
+#   workingset is a snapshot of the RawPhotos directory, and is where the work occurs
+#   OldDF is the master database, and gets updated and saved after each execution of "save"
+#   Inputs live in RawPhotos
+#   Outputs live in Photos
+#   OriginalLat holds location from exif header. GPSLatitude may get edited (corrected)
+
 library(shiny)
 library(tidyverse)
 library(purrr)
@@ -36,15 +42,16 @@ savepath <- "~/Dropbox/Rprojects/Sidewalk_Quality/Photos" # Processed Photos
 image_list <- list.files(path=rawpath , pattern = "*.jpg", full.names = TRUE)
 dat <- read_exif(image_list) # Read exif headers into data frame
 
-dat2 <- select(dat,
+workingset <- select(dat,
                SourceFile, DateTimeOriginal,
                GPSLongitude, GPSLatitude) %>% 
     arrange(DateTimeOriginal) %>% 
     mutate(SourceFile=str_extract(SourceFile, "[A-Z0-9_]*.jpg$")) %>% # just filename
     mutate(Quality="Not Set", Length=0, Direction="Not Set") %>% 
-    mutate(EndLon=GPSLongitude, EndLat=GPSLatitude)
+    mutate(EndLon=GPSLongitude, EndLat=GPSLatitude) %>% 
+    mutate(OriginalLat=GPSLatitude, OriginalLong=GPSLongitude)
 
-image_list <- paste0(rawpath,"/",dat2$SourceFile) # make sure image_list sort same as dat2
+image_list <- paste0(rawpath,"/",workingset$SourceFile) # make sure image_list sort same as workingset
 
 #       Is there an old tibble?
 
@@ -61,20 +68,19 @@ if (file.exists(oldfile)){
                     Length=numeric(),
                     Direction=character(),
                     EndLon=numeric(),
-                    EndLat=numeric())
+                    EndLat=numeric(),
+                    OriginalLat=numeric(),
+                    OriginalLong=numeric())
 }
 
-#   Join new data to old file
+#   Join new data to old file - but only new records
 
-OldDF <- bind_rows(OldDF, dat2)
-
-#   Remove any duplicate records
-
-OldDF <- distinct(OldDF)
+OldDF <- bind_rows(OldDF, anti_join(workingset, OldDF, by="SourceFile"))
 
 image_number <- 0 # initialize
 #   saved = True if photo has been saved
-saved <- logical(length=nrow(dat2))
+saved <- logical(length=nrow(workingset))
+
 
 ##################################################
 # Define UI for displaying and annotating photos
@@ -165,8 +171,8 @@ shinyApp(
         #   and direction as chosen
         #   Use approximation of 1 degree = 340,000 feet
         draw_points <- function(i, len, dir){
-            lat <- dat2$GPSLatitude[i]
-            lon <- dat2$GPSLongitude[i]
+            lat <- workingset$GPSLatitude[i]
+            lon <- workingset$GPSLongitude[i]
             latlon <- len/340000. # distance in lat long space
             newcoord <- case_when(
                 dir == "N" ~ list(lat+latlon, lon),
@@ -178,21 +184,27 @@ shinyApp(
                 dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
                 dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
             )
-            dat2$EndLon[i] <<- newcoord[[2]]
-            dat2$EndLat[i] <<- newcoord[[1]]
+            workingset$EndLon[i] <<- newcoord[[2]]
+            workingset$EndLat[i] <<- newcoord[[1]]
             LonLine <- c(lon, newcoord[[2]])
             LatLine <- c(lat, newcoord[[1]])
+            nextfive <- logical(length=nrow(workingset))
+            nextfive[(counter$image_number+1):(counter$image_number+6)] <- TRUE
             leafletProxy("LocalMap") %>% 
                        clearShapes() %>% 
-                       addCircleMarkers(dat2[saved,]$GPSLongitude, dat2[saved,]$GPSLatitude,
+                       addCircleMarkers(workingset[saved,]$GPSLongitude, 
+                                        workingset[saved,]$GPSLatitude,
                                         radius=3, opacity=1, color="#008000") %>% 
+                       addCircleMarkers(workingset[nextfive,]$GPSLongitude, 
+                                        workingset[nextfive,]$GPSLatitude,
+                                        radius=3, opacity=1, color="#00FFFF") %>% 
                        addCircleMarkers(lon, lat,
                                         radius=3, opacity=1, color="#ff0000") %>% 
                        addPolylines(lng = LonLine, lat = LatLine)
         }
         draw_map <- function(i, len, dir){
-            lat <- dat2$GPSLatitude[i]
-            lon <- dat2$GPSLongitude[i]
+            lat <- workingset$GPSLatitude[i]
+            lon <- workingset$GPSLongitude[i]
             #latlon <- len/340000. # distance in lat long space
             #newcoord <- case_when(
             #    dir == "N" ~ list(lat+latlon, lon),
@@ -204,17 +216,18 @@ shinyApp(
             #    dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
             #    dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
             #)
-            #dat2$EndLon[i] <<- newcoord[[2]]
-            #dat2$EndLat[i] <<- newcoord[[1]]
+            #workingset$EndLon[i] <<- newcoord[[2]]
+            #workingset$EndLat[i] <<- newcoord[[1]]
             #LonLine <- c(lon, newcoord[[2]])
             #LatLine <- c(lat, newcoord[[1]])
             output$LocalMap <- renderLeaflet({
                 leaflet() %>%
                        setView(lng = lon , lat = lat, zoom = zoom) %>% 
                        addTiles() %>%
-                       addCircleMarkers(dat2$GPSLongitude, dat2$GPSLatitude,
+                       addCircleMarkers(workingset$GPSLongitude, 
+                                        workingset$GPSLatitude,
                                         radius=3, opacity=1, color="#000000") #%>% 
-                       #addCircleMarkers(dat2[saved,]$GPSLongitude, dat2[saved,]$GPSLatitude,
+                       #addCircleMarkers(workingset[saved,]$GPSLongitude, workingset[saved,]$GPSLatitude,
                        #                 radius=3, opacity=1, color="#008000") %>% 
                        #addCircleMarkers(lon, lat,
                        #                 radius=3, opacity=1, color="#ff0000") %>% 
@@ -264,9 +277,9 @@ shinyApp(
             output$image <- image_prep(image_list[counter$image_number])
             draw_map(counter$image_number, input$length, input$direction)
             draw_points(counter$image_number, input$length, input$direction)
-            output$SourceFile <<- renderText(dat2[counter$image_number,]$SourceFile)
-            output$LatLong <<- renderText(paste(dat2[counter$image_number,]$GPSLatitude,",",
-                                          dat2[counter$image_number,]$GPSLongitude))
+            output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
+            output$LatLong <<- renderText(paste(workingset[counter$image_number,]$GPSLatitude,",",
+                                          workingset[counter$image_number,]$GPSLongitude))
          }, ignoreNULL=FALSE)
         
         
@@ -282,9 +295,9 @@ shinyApp(
             output$image <- image_prep(image_list[counter$image_number])
             draw_map(counter$image_number, input$length, input$direction)
             draw_points(counter$image_number, input$length, input$direction)
-            output$SourceFile <<- renderText(dat2[counter$image_number,]$SourceFile)
-            output$LatLong <<- renderText(paste(dat2[counter$image_number,]$GPSLatitude,",",
-                                          dat2[counter$image_number,]$GPSLongitude))
+            output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
+            output$LatLong <<- renderText(paste(workingset[counter$image_number,]$GPSLatitude,",",
+                                          workingset[counter$image_number,]$GPSLongitude))
          }, ignoreNULL=TRUE)
         
         
@@ -324,14 +337,14 @@ shinyApp(
                 ))
               }
             else {
-                mask <- OldDF$SourceFile==dat2$SourceFile[counter$image_number]
+                mask <- OldDF$SourceFile==workingset$SourceFile[counter$image_number]
                 OldDF$Quality[mask] <<- input$quality
                 OldDF$Length[mask] <<- input$length
                 OldDF$Direction[mask] <<- input$direction
-                OldDF$EndLon[mask] <<- dat2$EndLon[counter$image_number]
-                OldDF$EndLat[mask] <<- dat2$EndLat[counter$image_number]
+                OldDF$EndLon[mask] <<- workingset$EndLon[counter$image_number]
+                OldDF$EndLat[mask] <<- workingset$EndLat[counter$image_number]
                 
-                print(OldDF)
+                #print(OldDF)
                 
                 saveRDS(OldDF, oldfile)
                 
@@ -343,7 +356,7 @@ shinyApp(
                     image %>% 
                         image_strip() %>%  # remove exif headers
                         image_write( 
-                                path=paste0(savepath,"/",dat2$SourceFile[counter$image_number]), 
+                                path=paste0(savepath,"/",workingset$SourceFile[counter$image_number]), 
                                 format = 'jpg')
                     }
                 else { # Crop image
@@ -357,7 +370,7 @@ shinyApp(
                         image_strip() %>%  # remove exif headers
                         image_crop(geometry=geom) %>% # crop to selected area
                         image_write( 
-                                path=paste0(savepath,"/",dat2$SourceFile[counter$image_number]), 
+                                path=paste0(savepath,"/",workingset$SourceFile[counter$image_number]), 
                                 format = 'jpg')
                 }
                 #       Reset to defaults
@@ -375,3 +388,6 @@ shinyApp(
          }, ignoreNULL=TRUE)
     }
 )
+
+#print("This is where I can do some cleanup work")
+#print(paste("saved", saved))
