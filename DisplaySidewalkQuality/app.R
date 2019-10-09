@@ -64,7 +64,7 @@ shinyApp(
       titlePanel("Map of Sidewalk Quality in the Heights"),
       fluidRow(
         column(width = 8,
-               leafletOutput("LocalMap")
+               leafletOutput("LocalMap", height="85vh")
         ),
         
         #       Add right column with controls for display
@@ -105,9 +105,15 @@ shinyApp(
         ##################################
             output$LocalMap <- renderLeaflet({
                 #   Basemap
-                leaflet(OldDF) %>% 
+                #leaflet(OldDF) %>% 
+                leaflet() %>% 
                   setView(lng = -95.404606 , lat = 29.797131, zoom = init_zoom ) %>%   
-                    addTiles()
+                    addTiles() %>% 
+                    addLegend(
+                      position = "bottomright",
+                      colors = colorDF$Codes,
+                      labels = colorDF$Quality, opacity = 1,
+                      title = "Legend")
             }) 
             
         ##################################
@@ -116,7 +122,7 @@ shinyApp(
             observe({
                 #   Polylines (done in a loop to keep them from connecting)
                 #   scale width of lines in concert with zoom scale
-                wgt <- max(2,floor(2*(input$LocalMap_zoom-init_zoom)+0.5) + init_weight)
+                wgt <- max(0,floor(2*(input$LocalMap_zoom-init_zoom)+0.5) + init_weight)
                 #print(paste("weight:",wgt))
                 if (!is.null(input$quality)){
                     leafletProxy("LocalMap") %>% 
