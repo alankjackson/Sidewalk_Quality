@@ -68,6 +68,10 @@ if (file.exists(oldfile)){
 
 OldDF <- bind_rows(OldDF, dat2)
 
+#   Remove any duplicate records
+
+OldDF <- distinct(OldDF)
+
 image_number <- 0 # initialize
 #   saved = True if photo has been saved
 saved <- logical(length=nrow(dat2))
@@ -122,8 +126,8 @@ shinyApp(
                                                "Missing"="Missing")
                                 ),
                    numericInput("length", "Estimated length in feet",
-                               min = 0, max = 500, step=5,
-                               value = 50, width = '100px'),
+                               min = 0, max = 1000, step=5,
+                               value = 50, width = '100%'),
                    radioButtons("direction", label = "Viewing direction",
                                 choices = list("N" = "N", "E" = "E",
                                                "S" = "S", "W" = "W",
@@ -160,7 +164,7 @@ shinyApp(
         #   Draw map - show marker at lat/long, and draw line of proper length
         #   and direction as chosen
         #   Use approximation of 1 degree = 340,000 feet
-        draw_map <- function(i, len, dir){
+        draw_points <- function(i, len, dir){
             lat <- dat2$GPSLatitude[i]
             lon <- dat2$GPSLongitude[i]
             latlon <- len/340000. # distance in lat long space
@@ -178,17 +182,43 @@ shinyApp(
             dat2$EndLat[i] <<- newcoord[[1]]
             LonLine <- c(lon, newcoord[[2]])
             LatLine <- c(lat, newcoord[[1]])
-            output$LocalMap <- renderLeaflet({
-                leaflet() %>%
-                       setView(lng = lon , lat = lat, zoom = 20) %>% 
-                       addTiles() %>%
-                       addCircleMarkers(dat2$GPSLongitude, dat2$GPSLatitude,
-                                        radius=3, opacity=1, color="#000000") %>% 
+            leafletProxy("LocalMap") %>% 
+                       clearShapes() %>% 
                        addCircleMarkers(dat2[saved,]$GPSLongitude, dat2[saved,]$GPSLatitude,
                                         radius=3, opacity=1, color="#008000") %>% 
                        addCircleMarkers(lon, lat,
                                         radius=3, opacity=1, color="#ff0000") %>% 
                        addPolylines(lng = LonLine, lat = LatLine)
+        }
+        draw_map <- function(i, len, dir){
+            lat <- dat2$GPSLatitude[i]
+            lon <- dat2$GPSLongitude[i]
+            #latlon <- len/340000. # distance in lat long space
+            #newcoord <- case_when(
+            #    dir == "N" ~ list(lat+latlon, lon),
+            #    dir == "S" ~ list(lat-latlon, lon),
+            #    dir == "E" ~ list(lat, lon+latlon),
+            #    dir == "W" ~ list(lat, lon-latlon),
+            #    dir == "NE" ~ list(lat+latlon*0.707, lon+latlon*0.707),
+            #    dir == "NW" ~ list(lat+latlon*0.707, lon-latlon*0.707),
+            #    dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
+            #    dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
+            #)
+            #dat2$EndLon[i] <<- newcoord[[2]]
+            #dat2$EndLat[i] <<- newcoord[[1]]
+            #LonLine <- c(lon, newcoord[[2]])
+            #LatLine <- c(lat, newcoord[[1]])
+            output$LocalMap <- renderLeaflet({
+                leaflet() %>%
+                       setView(lng = lon , lat = lat, zoom = zoom) %>% 
+                       addTiles() %>%
+                       addCircleMarkers(dat2$GPSLongitude, dat2$GPSLatitude,
+                                        radius=3, opacity=1, color="#000000") #%>% 
+                       #addCircleMarkers(dat2[saved,]$GPSLongitude, dat2[saved,]$GPSLatitude,
+                       #                 radius=3, opacity=1, color="#008000") %>% 
+                       #addCircleMarkers(lon, lat,
+                       #                 radius=3, opacity=1, color="#ff0000") %>% 
+                       #addPolylines(lng = LonLine, lat = LatLine)
             })
         }
         
@@ -205,14 +235,16 @@ shinyApp(
         ### length ###
         ##############
         observeEvent(input$length, {
-            draw_map(counter$image_number, input$length, input$direction)
+            #draw_map(counter$image_number, input$length, input$direction)
+            draw_points(counter$image_number, input$length, input$direction)
          }, ignoreNULL=FALSE)
         
         #################
         ### direction ###
         #################
         observeEvent(input$direction, {
-            draw_map(counter$image_number, input$length, input$direction)
+            #draw_map(counter$image_number, input$length, input$direction)
+            draw_points(counter$image_number, input$length, input$direction)
          }, ignoreNULL=FALSE)
         
         
@@ -231,6 +263,7 @@ shinyApp(
             counter$image_number <- min(length(image_list), counter$image_number+1)
             output$image <- image_prep(image_list[counter$image_number])
             draw_map(counter$image_number, input$length, input$direction)
+            draw_points(counter$image_number, input$length, input$direction)
             output$SourceFile <<- renderText(dat2[counter$image_number,]$SourceFile)
             output$LatLong <<- renderText(paste(dat2[counter$image_number,]$GPSLatitude,",",
                                           dat2[counter$image_number,]$GPSLongitude))
@@ -248,6 +281,7 @@ shinyApp(
             counter$image_number <- max(1, counter$image_number-1)
             output$image <- image_prep(image_list[counter$image_number])
             draw_map(counter$image_number, input$length, input$direction)
+            draw_points(counter$image_number, input$length, input$direction)
             output$SourceFile <<- renderText(dat2[counter$image_number,]$SourceFile)
             output$LatLong <<- renderText(paste(dat2[counter$image_number,]$GPSLatitude,",",
                                           dat2[counter$image_number,]$GPSLongitude))
@@ -333,6 +367,7 @@ shinyApp(
                 counter$image_number <<- min(length(image_list), counter$image_number+1)
                 output$image <- image_prep(image_list[counter$image_number])
                 draw_map(counter$image_number, input$length, input$direction)
+                draw_points(counter$image_number, input$length, input$direction)
                 if (counter$image_number == length(image_list)){
                   showNotification("Last image in set")
                 }
