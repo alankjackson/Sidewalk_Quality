@@ -81,6 +81,10 @@ image_number <- 0 # initialize
 #   saved = True if photo has been saved
 saved <- logical(length=nrow(workingset))
 
+#   Flag records from workingset that are already done
+
+saved[workingset$SourceFile %in% anti_join(workingset, OldDF)$SourceFile] <- TRUE
+
 
 ##################################################
 # Define UI for displaying and annotating photos
@@ -192,12 +196,15 @@ shinyApp(
             nextfive[(counter$image_number+1):(counter$image_number+6)] <- TRUE
             leafletProxy("LocalMap") %>% 
                        clearShapes() %>% 
-                       addCircleMarkers(workingset[saved,]$GPSLongitude, 
-                                        workingset[saved,]$GPSLatitude,
-                                        radius=3, opacity=1, color="#008000") %>% 
+                              # aqua means one of next five to be done
                        addCircleMarkers(workingset[nextfive,]$GPSLongitude, 
                                         workingset[nextfive,]$GPSLatitude,
                                         radius=3, opacity=1, color="#00FFFF") %>% 
+                              # green means already done
+                       addCircleMarkers(workingset[saved,]$GPSLongitude, 
+                                        workingset[saved,]$GPSLatitude,
+                                        radius=3, opacity=1, color="#008000") %>% 
+                              # red means current point
                        addCircleMarkers(lon, lat,
                                         radius=3, opacity=1, color="#ff0000") %>% 
                        addPolylines(lng = LonLine, lat = LatLine)
