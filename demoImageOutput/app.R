@@ -28,6 +28,7 @@ library(purrr)
 library(exifr)
 library(magick)
 library(leaflet)
+library(leaflet.extras)
 
 ###################################
 #   get and set up the basic data
@@ -77,6 +78,10 @@ if (file.exists(oldfile)){
 
 OldDF <- bind_rows(OldDF, anti_join(workingset, OldDF, by="SourceFile"))
 
+#   Add an ID field to workingset
+
+workingset <- cbind(id=rownames(workingset), workingset, stringsAsFactors=FALSE)
+
 image_number <- 0 # initialize
 #   saved = True if photo has been saved
 saved <- logical(length=nrow(workingset))
@@ -122,8 +127,10 @@ shinyApp(
             ),
             
             #       Add left column with controls for labeling
-            column(width = 2,
+            column(width = 4,
                    #    Quality, Length, and Direction
+              tabsetPanel(id="tabs",
+                tabPanel("Annotate", fluid=TRUE,value="annotate",
                    radioButtons("quality", label = "Sidewalk quality",
                                 choices = list("None selected" = "",
                                                "Good"="Good", "Bushes"="Bushes", 
@@ -137,15 +144,40 @@ shinyApp(
                                 ),
                    numericInput("length", "Estimated length in feet",
                                min = 0, max = 1000, step=5,
-                               value = 50, width = '100%'),
+                               value = 50, width = '80%'),
                    radioButtons("direction", label = "Viewing direction",
                                 choices = list("N" = "N", "E" = "E",
                                                "S" = "S", "W" = "W",
                                                "NW"="NW", "NE"="NE",
                                                "SE"="SE", "SW"="SW"), 
                                 selected = "N")
-            )
-        )
+                ), # end tabPanel Annotate
+                tabPanel("Align", fluid=TRUE, value="Aligntab",
+                         HTML("<hr>"),
+                         tags$em("Pick the start and end points for alignment"),
+                         tags$em("and then draw the line to move them to."),
+                         HTML("<hr>"),
+                         textOutput("EndPoints"),
+                         HTML("<hr>"),
+                         actionButton("Align", "Align"),
+                         actionButton("ClearAlign", "Clear"),
+                         HTML("<hr>"),
+                         actionButton("RevertCurrent", "Revert Current"),
+                         actionButton("RevertAll", "Revert All")
+                ), # end tabPanel Align
+                tabPanel("Move", fluid=TRUE, value="Movetab",
+                         HTML("<hr>"),
+                         tags$em("Pick the point to be moved"),
+                         tags$em("and then pick the destination."),
+                         HTML("<hr>"),
+                         actionButton("Move", "Move"),
+                         actionButton("ClearMove", "Clear"),
+                         HTML("<hr>"),
+                         actionButton("RevertMove", "Revert Move")
+                )  # end tabPanel Move
+            ) 
+          )
+        ) 
     ),
     
 #####################################################
@@ -154,7 +186,8 @@ shinyApp(
 
 
     server = function(input, output, session) {
-        
+      
+      
         #   Size of images from phone is 4032x3024
         #   Function to prep image
         #   want height to be 378
@@ -199,48 +232,265 @@ shinyApp(
                               # aqua means one of next five to be done
                        addCircleMarkers(workingset[nextfive,]$GPSLongitude, 
                                         workingset[nextfive,]$GPSLatitude,
-                                        radius=3, opacity=1, color="#00FFFF") %>% 
+                                        radius=3, opacity=1, color="#00FFFF",
+                                        layerId = workingset[nextfive,]$id) %>% 
                               # green means already done
                        addCircleMarkers(workingset[saved,]$GPSLongitude, 
                                         workingset[saved,]$GPSLatitude,
-                                        radius=3, opacity=1, color="#008000") %>% 
+                                        radius=3, opacity=1, color="#008000",
+                                        layerId = workingset[saved,]$id) %>% 
                               # red means current point
                        addCircleMarkers(lon, lat,
                                         radius=3, opacity=1, color="#ff0000") %>% 
                        addPolylines(lng = LonLine, lat = LatLine)
-        }
+        }  #  end of draw points
+        
+        #   Draw a single point to highlight
+        draw_highlight <- function(ids){
+            temp <- workingset %>% filter(id %in% c(ids[1]:ids[length(ids)]))
+            #temp <- workingset %>% filter(id %in% ids)
+            print(temp)
+            leafletProxy("LocalMap") %>% 
+                       clearGroup(group="align") %>% 
+                       addCircleMarkers(workingset$GPSLongitude, 
+                                        workingset$GPSLatitude,
+                                        radius=3, opacity=1, color="#000000", 
+                                        layerId = workingset$id,
+                                        label = workingset$id,
+                                        group = "align", 
+                                        labelOptions = labelOptions(noHide = TRUE, 
+                                                                    offset=c(18,0), 
+                                                                    textOnly = TRUE)) %>% 
+                              # aqua means selected
+                       addCircleMarkers(temp$GPSLongitude, 
+                                        temp$GPSLatitude,
+                                        radius=3, opacity=1, color="#00FFFF",
+                                        layerId = temp$id,
+                                        group = "align") 
+        }  # end draw highlight
+        
         draw_map <- function(i, len, dir){
             lat <- workingset$GPSLatitude[i]
             lon <- workingset$GPSLongitude[i]
-            #latlon <- len/340000. # distance in lat long space
-            #newcoord <- case_when(
-            #    dir == "N" ~ list(lat+latlon, lon),
-            #    dir == "S" ~ list(lat-latlon, lon),
-            #    dir == "E" ~ list(lat, lon+latlon),
-            #    dir == "W" ~ list(lat, lon-latlon),
-            #    dir == "NE" ~ list(lat+latlon*0.707, lon+latlon*0.707),
-            #    dir == "NW" ~ list(lat+latlon*0.707, lon-latlon*0.707),
-            #    dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
-            #    dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
-            #)
-            #workingset$EndLon[i] <<- newcoord[[2]]
-            #workingset$EndLat[i] <<- newcoord[[1]]
-            #LonLine <- c(lon, newcoord[[2]])
-            #LatLine <- c(lat, newcoord[[1]])
+
             output$LocalMap <- renderLeaflet({
                 leaflet() %>%
                        setView(lng = lon , lat = lat, zoom = zoom) %>% 
                        addTiles() %>%
                        addCircleMarkers(workingset$GPSLongitude, 
                                         workingset$GPSLatitude,
-                                        radius=3, opacity=1, color="#000000") #%>% 
-                       #addCircleMarkers(workingset[saved,]$GPSLongitude, workingset[saved,]$GPSLatitude,
-                       #                 radius=3, opacity=1, color="#008000") %>% 
-                       #addCircleMarkers(lon, lat,
-                       #                 radius=3, opacity=1, color="#ff0000") %>% 
-                       #addPolylines(lng = LonLine, lat = LatLine)
+                                        radius=3, opacity=1, color="#000000") 
+
+            }) 
+        }  # end of draw_map
+        draw_mapedit <- function(i, len, dir){
+          lat <- workingset$GPSLatitude[i]
+          lon <- workingset$GPSLongitude[i]
+          
+            output$LocalMap <- renderLeaflet({
+              print("--1--")
+                leaflet() %>%
+                       setView(lng = lon , lat = lat, zoom = zoom) %>% 
+                       addTiles() %>%
+          #if (!is.null(lineID)){ print(lineID)
+          #  removeShape(map=LocalMap, layerID=lineID)}
+                       addCircleMarkers(workingset$GPSLongitude, 
+                                        workingset$GPSLatitude,
+                                        radius=3, opacity=1, color="#000000", 
+                                        layerId = workingset$id,
+                                        label = workingset$id,
+                                        labelOptions = labelOptions(noHide = TRUE, 
+                                                                    offset=c(18,0), 
+                                                                    textOnly = TRUE)) %>% 
+              addDrawToolbar(
+                targetGroup='draw',
+                polygonOptions=FALSE,
+                circleOptions=FALSE,
+                circleMarkerOptions=FALSE,
+                rectangleOptions=FALSE,
+                markerOptions=FALSE,
+                singleFeature = TRUE,
+                editOptions = editToolbarOptions(selectedPathOptions = selectedPathOptions()))  %>%
+                addLayersControl(overlayGroups = c('draw'), options =
+                                   layersControlOptions(collapsed=FALSE))
+              
             })
+        } # end  of draw_mapedit
+        
+        ####  clearAlign clear stuff set for alignment tab
+        clearAlign <- function(){
+          pt_ids <<- c()
+          line_ends <<- tribble(
+            ~lat, ~lon
+          )
+          output$EndPoints <<- renderText("No points picked")
+          draw_mapedit(counter$image_number, input$length, input$direction)
+          AlignLine <<- AlignLine[0,]
+          #if (!is.null(lineID)){ print(lineID)
+          #  removeShape(map=LocalMap, layerID=lineID)}
+          print("clearAlign")
         }
+        
+        ####  Find project of point onto line
+        ProjPt <- function(pt_id, endpts){ # id = id for point, endpts = endpoints of line
+          print("--- ProjPt ---")
+          #print(endpts)
+          px <- workingset$GPSLongitude[workingset$id==pt_id]
+          py <- workingset$GPSLatitude[workingset$id==pt_id]
+          dot <- (endpts[2,]$x - endpts[1,]$x)*(px - endpts[1,]$x) +
+                 (endpts[2,]$y - endpts[1,]$y)*(py - endpts[1,]$y)
+          len <- (endpts[2,]$x - endpts[1,]$x)**2 + (endpts[2,]$y - endpts[1,]$y)**2
+          return(c(endpts[1,]$x + (dot*(endpts[2,]$x - endpts[1,]$x))/len,
+                   endpts[1,]$y + (dot*(endpts[2,]$y - endpts[1,]$y))/len))
+          
+        }
+
+        ##############
+        #### tabs ####
+        ##############
+      observeEvent(input$tabs, { # change map based on tab exposed
+        print(paste("tab:", input$tabs))  
+        if (input$tabs=="annotate") {
+          draw_map(counter$image_number, input$length, input$direction)
+          draw_points(counter$image_number, input$length, input$direction)
+        } else {
+          clearAlign()
+          draw_mapedit(counter$image_number, input$length, input$direction)
+        }
+      })
+      
+        ####################
+        ### marker click ###
+        ####################
+      observeEvent(input$LocalMap_marker_click, {
+        click <- input$LocalMap_marker_click
+        if(is.null(click) | (input$tabs=="annotate")) # only respond if on correct tab
+          return()
+        print(paste("click ", click[[1]]))
+        #   Change color to show selected and store id
+        #   Only store a max of 2 ID's. Overwrite second one if needed
+        if (length(pt_ids)==2){
+          if (pt_ids[1]==click[[1]]) {return()}  # can't set end = start
+          pt_ids[2] <<- click[[1]]
+          output$EndPoints <<- renderText(paste("Start:",pt_ids[1], "End:", pt_ids[2]))
+        } else if (length(pt_ids)==1) {
+          if (pt_ids[1]==click[[1]]) {return()}  # can't set end = start
+          pt_ids <<- append(pt_ids, click[[1]])
+          output$EndPoints <<- renderText(paste("Start:",pt_ids[1], "End:", pt_ids[2]))
+        } else {
+          pt_ids[1] <<- click[[1]]
+          output$EndPoints <<- renderText(paste("Start:",pt_ids[1]))
+        }
+        draw_highlight(pt_ids)
+        print(paste("pt_ids:", pt_ids))
+        
+      })   
+      
+        #################
+        ### Draw Line ###
+        ################# 
+      #observeEvent(input$LocalMap_draw_stop, {
+      observeEvent(input$LocalMap_draw_new_feature, {
+        if (input$LocalMap_draw_new_feature$properties$feature_type=="polyline"){
+          print("------- draw line --------")
+          #   Save points for later use
+          AlignLine <<- tribble(
+            ~x, ~y,
+            input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[1]],
+            input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[2]],
+            input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[1]],
+            input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[2]]
+          )
+          print(AlignLine)
+          lineID <<- input$LocalMap_draw_new_feature$properties$`_leaflet_id`
+        } ##  end draw poly
+      }, ignoreNULL=TRUE)
+        
+        #########################
+        ### ClearAlign button ###
+        #########################
+        observeEvent(input$ClearAlign, {
+            clearAlign()
+         }, ignoreNULL=TRUE)
+        
+        #########################
+        ### Align button ###
+        #########################
+        observeEvent(input$Align, {
+          print(AlignLine)
+          for (pt in c(pt_ids[1]:pt_ids[length(ids)])) {
+            print(paste("--point id--", pt))
+            newpt <- ProjPt(pt, AlignLine) # id = id for point, endpts = endpoints of line
+            print(paste("old point:", workingset$GPSLongitude[workingset$id==pt],
+                                      workingset$GPSLatitude[workingset$id==pt]))
+            print(paste("new point:", newpt[1], newpt[2]))
+            #####   delete below here
+            leafletProxy("LocalMap") %>% 
+              # aqua means selected
+              addCircleMarkers(newpt[1],
+                               newpt[2],
+                               radius=3, opacity=1, color="#0000FF")
+            #####  stop delete here
+          }
+        }, ignoreNULL=TRUE)
+        ############################
+        ### RevertCurrent button ###
+        ############################
+        observeEvent(input$RevertCurrent, {
+          workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$GPSLatitude <- 
+                     workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$OriginalLat
+          workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$GPSLongitude <- 
+                     workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$OriginalLong
+        }, ignoreNULL=TRUE)
+        ########################
+        ### RevertAll button ###
+        ########################
+        observeEvent(input$RevertAll, {
+          workingset$GPSLongitude <- workingset$OriginalLong
+          workingset$GPSLatitude <- workingset$OriginalLat
+          
+        }, ignoreNULL=TRUE)  
+        
+        
+        
+        # Start of Drawing
+        #observeEvent(input$LocalMap_draw_start, {
+        #  print("------------------Start of drawing")
+        #  print(input$LocalMap_draw_start)
+        #})
+        
+        # Stop of Drawing
+        #observeEvent(input$LocalMap_draw_stop, {
+        #  print("------------------Stopped drawing")
+        #  print(input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[1]])
+        #  print(input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[2]])
+        #  print(input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[1]])
+        #  print(input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[2]])
+        #})
+        
+        # New Feature
+        observeEvent(input$LocalMap_draw_new_feature, {
+          print("------------------New Feature")
+          print(input$LocalMap_draw_new_feature)
+          #print(input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[1]])
+          #print(input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[2]])
+          #print(input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[1]])
+          #print(input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[2]])
+        })
+        
+        # Edited Features
+        observeEvent(input$LocalMap_draw_edited_features, {
+          print("------------------Edited Features")
+          #print(input$LocalMap_draw_edited_features)
+          print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[1]][[1]])
+          print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[1]][[2]])
+          print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[2]][[1]])
+          print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[2]][[2]])
+        })
+        #observeEvent(input$LocalMap_draw_all_features, {
+        #  print("------------------All Features")
+        #  print(input$LocalMap_draw_all_features)
+        #})
         
         #       Reset controls - for when new image appears
         
