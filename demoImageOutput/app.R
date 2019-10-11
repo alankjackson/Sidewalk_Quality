@@ -20,7 +20,7 @@
 #   OldDF is the master database, and gets updated and saved after each execution of "save"
 #   Inputs live in RawPhotos
 #   Outputs live in Photos
-#   OriginalLat holds location from exif header. GPSLatitude may get edited (corrected)
+#   OriginalLat holds location from exif header. NewLat may get edited (corrected)
 
 library(shiny)
 library(tidyverse)
@@ -50,7 +50,7 @@ workingset <- select(dat,
     mutate(SourceFile=str_extract(SourceFile, "[A-Z0-9_]*.jpg$")) %>% # just filename
     mutate(Quality="Not Set", Length=0, Direction="Not Set") %>% 
     mutate(EndLon=GPSLongitude, EndLat=GPSLatitude) %>% 
-    mutate(OriginalLat=GPSLatitude, OriginalLong=GPSLongitude)
+    mutate(NewLat=GPSLatitude, NewLong=GPSLongitude)
 
 image_list <- paste0(rawpath,"/",workingset$SourceFile) # make sure image_list sort same as workingset
 
@@ -70,8 +70,8 @@ if (file.exists(oldfile)){
                     Direction=character(),
                     EndLon=numeric(),
                     EndLat=numeric(),
-                    OriginalLat=numeric(),
-                    OriginalLong=numeric())
+                    NewLat=numeric(),
+                    NewLong=numeric())
 }
 
 #   Join new data to old file - but only new records
@@ -208,8 +208,8 @@ shinyApp(
         #   and direction as chosen
         #   Use approximation of 1 degree = 340,000 feet
         draw_points <- function(i, len, dir){
-            lat <- workingset$GPSLatitude[i]
-            lon <- workingset$GPSLongitude[i]
+            lat <- workingset$NewLat[i]
+            lon <- workingset$NewLong[i]
             latlon <- len/340000. # distance in lat long space
             newcoord <- case_when(
                 dir == "N" ~ list(lat+latlon, lon),
@@ -230,13 +230,13 @@ shinyApp(
             leafletProxy("LocalMap") %>% 
                        clearShapes() %>% 
                               # aqua means one of next five to be done
-                       addCircleMarkers(workingset[nextfive,]$GPSLongitude, 
-                                        workingset[nextfive,]$GPSLatitude,
+                       addCircleMarkers(workingset[nextfive,]$NewLong, 
+                                        workingset[nextfive,]$NewLat,
                                         radius=3, opacity=1, color="#00FFFF",
                                         layerId = workingset[nextfive,]$id) %>% 
                               # green means already done
-                       addCircleMarkers(workingset[saved,]$GPSLongitude, 
-                                        workingset[saved,]$GPSLatitude,
+                       addCircleMarkers(workingset[saved,]$NewLong, 
+                                        workingset[saved,]$NewLat,
                                         radius=3, opacity=1, color="#008000",
                                         layerId = workingset[saved,]$id) %>% 
                               # red means current point
@@ -252,8 +252,8 @@ shinyApp(
             print(temp)
             leafletProxy("LocalMap") %>% 
                        clearGroup(group="align") %>% 
-                       addCircleMarkers(workingset$GPSLongitude, 
-                                        workingset$GPSLatitude,
+                       addCircleMarkers(workingset$NewLong, 
+                                        workingset$NewLat,
                                         radius=3, opacity=1, color="#000000", 
                                         layerId = workingset$id,
                                         label = workingset$id,
@@ -262,30 +262,30 @@ shinyApp(
                                                                     offset=c(18,0), 
                                                                     textOnly = TRUE)) %>% 
                               # aqua means selected
-                       addCircleMarkers(temp$GPSLongitude, 
-                                        temp$GPSLatitude,
+                       addCircleMarkers(temp$NewLong, 
+                                        temp$NewLat,
                                         radius=3, opacity=1, color="#00FFFF",
                                         layerId = temp$id,
                                         group = "align") 
         }  # end draw highlight
         
         draw_map <- function(i, len, dir){
-            lat <- workingset$GPSLatitude[i]
-            lon <- workingset$GPSLongitude[i]
+            lat <- workingset$NewLat[i]
+            lon <- workingset$NewLong[i]
 
             output$LocalMap <- renderLeaflet({
                 leaflet() %>%
                        setView(lng = lon , lat = lat, zoom = zoom) %>% 
                        addTiles() %>%
-                       addCircleMarkers(workingset$GPSLongitude, 
-                                        workingset$GPSLatitude,
+                       addCircleMarkers(workingset$NewLong, 
+                                        workingset$NewLat,
                                         radius=3, opacity=1, color="#000000") 
 
             }) 
         }  # end of draw_map
         draw_mapedit <- function(i, len, dir){
-          lat <- workingset$GPSLatitude[i]
-          lon <- workingset$GPSLongitude[i]
+          lat <- workingset$NewLat[i]
+          lon <- workingset$NewLong[i]
           
             output$LocalMap <- renderLeaflet({
               print("--1--")
@@ -294,8 +294,8 @@ shinyApp(
                        addTiles() %>%
           #if (!is.null(lineID)){ print(lineID)
           #  removeShape(map=LocalMap, layerID=lineID)}
-                       addCircleMarkers(workingset$GPSLongitude, 
-                                        workingset$GPSLatitude,
+                       addCircleMarkers(workingset$NewLong, 
+                                        workingset$NewLat,
                                         radius=3, opacity=1, color="#000000", 
                                         layerId = workingset$id,
                                         label = workingset$id,
@@ -335,8 +335,8 @@ shinyApp(
         ProjPt <- function(pt_id, endpts){ # id = id for point, endpts = endpoints of line
           print("--- ProjPt ---")
           #print(endpts)
-          px <- workingset$GPSLongitude[workingset$id==pt_id]
-          py <- workingset$GPSLatitude[workingset$id==pt_id]
+          px <- workingset$NewLong[workingset$id==pt_id]
+          py <- workingset$NewLat[workingset$id==pt_id]
           dot <- (endpts[2,]$x - endpts[1,]$x)*(px - endpts[1,]$x) +
                  (endpts[2,]$y - endpts[1,]$y)*(py - endpts[1,]$y)
           len <- (endpts[2,]$x - endpts[1,]$x)**2 + (endpts[2,]$y - endpts[1,]$y)**2
@@ -389,7 +389,7 @@ shinyApp(
         #################
         ### Draw Line ###
         ################# 
-      #observeEvent(input$LocalMap_draw_stop, {
+      #observeEvent(input$LocalMap_draw_stop, { # fails on second use
       observeEvent(input$LocalMap_draw_new_feature, {
         if (input$LocalMap_draw_new_feature$properties$feature_type=="polyline"){
           print("------- draw line --------")
@@ -402,7 +402,7 @@ shinyApp(
             input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[2]]
           )
           print(AlignLine)
-          lineID <<- input$LocalMap_draw_new_feature$properties$`_leaflet_id`
+          #lineID <<- input$LocalMap_draw_new_feature$properties$`_leaflet_id`
         } ##  end draw poly
       }, ignoreNULL=TRUE)
         
@@ -421,8 +421,8 @@ shinyApp(
           for (pt in c(pt_ids[1]:pt_ids[length(ids)])) {
             print(paste("--point id--", pt))
             newpt <- ProjPt(pt, AlignLine) # id = id for point, endpts = endpoints of line
-            print(paste("old point:", workingset$GPSLongitude[workingset$id==pt],
-                                      workingset$GPSLatitude[workingset$id==pt]))
+            print(paste("old point:", workingset$NewLong[workingset$id==pt],
+                                      workingset$NewLat[workingset$id==pt]))
             print(paste("new point:", newpt[1], newpt[2]))
             #####   delete below here
             leafletProxy("LocalMap") %>% 
@@ -437,17 +437,17 @@ shinyApp(
         ### RevertCurrent button ###
         ############################
         observeEvent(input$RevertCurrent, {
-          workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$GPSLatitude <- 
-                     workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$OriginalLat
-          workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$GPSLongitude <- 
-                     workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$OriginalLong
+          workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$NewLat <- 
+                     workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$GPSLatitude
+          workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$NewLong <- 
+                     workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$GPSLongitude
         }, ignoreNULL=TRUE)
         ########################
         ### RevertAll button ###
         ########################
         observeEvent(input$RevertAll, {
-          workingset$GPSLongitude <- workingset$OriginalLong
-          workingset$GPSLatitude <- workingset$OriginalLat
+          workingset$NewLong <- workingset$GPSLongitude
+          workingset$NewLat <- workingset$GPSLatitude
           
         }, ignoreNULL=TRUE)  
         
@@ -535,8 +535,8 @@ shinyApp(
             draw_map(counter$image_number, input$length, input$direction)
             draw_points(counter$image_number, input$length, input$direction)
             output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
-            output$LatLong <<- renderText(paste(workingset[counter$image_number,]$GPSLatitude,",",
-                                          workingset[counter$image_number,]$GPSLongitude))
+            output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
+                                          workingset[counter$image_number,]$NewLong))
          }, ignoreNULL=FALSE)
         
         
@@ -553,8 +553,8 @@ shinyApp(
             draw_map(counter$image_number, input$length, input$direction)
             draw_points(counter$image_number, input$length, input$direction)
             output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
-            output$LatLong <<- renderText(paste(workingset[counter$image_number,]$GPSLatitude,",",
-                                          workingset[counter$image_number,]$GPSLongitude))
+            output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
+                                          workingset[counter$image_number,]$NewLong))
          }, ignoreNULL=TRUE)
         
         
