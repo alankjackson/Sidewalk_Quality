@@ -122,8 +122,8 @@ shinyApp(
             observe({
                 #   Polylines (done in a loop to keep them from connecting)
                 #   scale width of lines in concert with zoom scale
-                wgt <- max(0,floor(2*(input$LocalMap_zoom-init_zoom)+0.5) + init_weight)
-                #print(paste("weight:",wgt))
+                wgt <- max(2,floor(2*(input$LocalMap_zoom-init_zoom)+0.5) + init_weight)
+                #print(paste("weight:",wgt, init_weight, "zooms", input$LocalMap_zoom, init_zoom))
                 if (!is.null(input$quality)){
                     leafletProxy("LocalMap") %>% 
                     clearShapes()  
