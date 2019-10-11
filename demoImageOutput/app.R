@@ -90,6 +90,23 @@ saved <- logical(length=nrow(workingset))
 
 saved[workingset$SourceFile %in% anti_join(workingset, OldDF)$SourceFile] <- TRUE
 
+#######################################################
+#   Javascript for removing polylines
+# https://github.com/bhaskarvk/leaflet.extras/issues/96
+#######################################################
+scr <- tags$script(HTML(
+  "
+Shiny.addCustomMessageHandler(
+  'removeleaflet',
+  function(x){
+    console.log('deleting',x)
+    // get leaflet map
+    var map = HTMLWidgets.find('#' + x.elid).getMap();
+    // remove
+    map.removeLayer(map._layers[x.layerid])
+  })
+"
+))
 
 ##################################################
 # Define UI for displaying and annotating photos
@@ -100,6 +117,7 @@ saved[workingset$SourceFile %in% anti_join(workingset, OldDF)$SourceFile] <- TRU
 shinyApp(
     ui = basicPage(
         fluidRow(
+          scr,
             column(width = 8,
                    imageOutput("image", height=378,
                                click = "image_click",
@@ -123,7 +141,7 @@ shinyApp(
                    
                    #        Add map
                    
-                   leafletOutput("LocalMap")
+                   leafletOutput("LocalMap", height="45vh")
             ),
             
             #       Add left column with controls for labeling
@@ -140,7 +158,8 @@ shinyApp(
                                                "Debris/Mud"="Debris/Mud", 
                                                "Gravel"="Gravel", 
                                                "No Curb Cut"="No Curb Cut", 
-                                               "Missing"="Missing")
+                                               "Missing"="Missing",
+                                               "BadPict"="BadPict")
                                 ),
                    numericInput("length", "Estimated length in feet",
                                min = 0, max = 1000, step=5,
@@ -161,6 +180,7 @@ shinyApp(
                          HTML("<hr>"),
                          actionButton("Align", "Align"),
                          actionButton("ClearAlign", "Clear"),
+                         actionButton("ApplyAlign", "Apply"),
                          HTML("<hr>"),
                          actionButton("RevertCurrent", "Revert Current"),
                          actionButton("RevertAll", "Revert All")
@@ -172,6 +192,7 @@ shinyApp(
                          HTML("<hr>"),
                          actionButton("Move", "Move"),
                          actionButton("ClearMove", "Clear"),
+                         actionButton("ApplyMove", "Apply"),
                          HTML("<hr>"),
                          actionButton("RevertMove", "Revert Move")
                 )  # end tabPanel Move
@@ -204,9 +225,11 @@ shinyApp(
             return(tmp)
         }
         
+        #########################################
         #   Draw map - show marker at lat/long, and draw line of proper length
         #   and direction as chosen
         #   Use approximation of 1 degree = 340,000 feet
+        #########################################
         draw_points <- function(i, len, dir){
             lat <- workingset$NewLat[i]
             lon <- workingset$NewLong[i]
@@ -245,10 +268,11 @@ shinyApp(
                        addPolylines(lng = LonLine, lat = LatLine)
         }  #  end of draw points
         
+        #########################################
         #   Draw a single point to highlight
+        #########################################
         draw_highlight <- function(ids){
             temp <- workingset %>% filter(id %in% c(ids[1]:ids[length(ids)]))
-            #temp <- workingset %>% filter(id %in% ids)
             print(temp)
             leafletProxy("LocalMap") %>% 
                        clearGroup(group="align") %>% 
@@ -269,6 +293,9 @@ shinyApp(
                                         group = "align") 
         }  # end draw highlight
         
+        #########################################
+        ####    Base Map
+        #########################################
         draw_map <- function(i, len, dir){
             lat <- workingset$NewLat[i]
             lon <- workingset$NewLong[i]
@@ -283,17 +310,12 @@ shinyApp(
 
             }) 
         }  # end of draw_map
-        draw_mapedit <- function(i, len, dir){
-          lat <- workingset$NewLat[i]
-          lon <- workingset$NewLong[i]
-          
-            output$LocalMap <- renderLeaflet({
-              print("--1--")
-                leaflet() %>%
-                       setView(lng = lon , lat = lat, zoom = zoom) %>% 
-                       addTiles() %>%
-          #if (!is.null(lineID)){ print(lineID)
-          #  removeShape(map=LocalMap, layerID=lineID)}
+        #########################################
+        #########################################
+        draw_mapedit <- function(){
+              leafletProxy("LocalMap") %>% 
+                       clearShapes() %>% 
+                       clearGroup(group="projected") %>% 
                        addCircleMarkers(workingset$NewLong, 
                                         workingset$NewLat,
                                         radius=3, opacity=1, color="#000000", 
@@ -314,24 +336,31 @@ shinyApp(
                 addLayersControl(overlayGroups = c('draw'), options =
                                    layersControlOptions(collapsed=FALSE))
               
-            })
         } # end  of draw_mapedit
         
+        #########################################
         ####  clearAlign clear stuff set for alignment tab
+        #########################################
         clearAlign <- function(){
           pt_ids <<- c()
           line_ends <<- tribble(
             ~lat, ~lon
           )
           output$EndPoints <<- renderText("No points picked")
-          draw_mapedit(counter$image_number, input$length, input$direction)
+          draw_mapedit()
           AlignLine <<- AlignLine[0,]
-          #if (!is.null(lineID)){ print(lineID)
-          #  removeShape(map=LocalMap, layerID=lineID)}
+          if (!is.null(lineID)){ 
+            session$sendCustomMessage(
+              "removeleaflet",
+              list(elid="LocalMap", layerid=lineID)
+            )
+            }
           print("clearAlign")
         }
         
+        #########################################
         ####  Find project of point onto line
+        #########################################
         ProjPt <- function(pt_id, endpts){ # id = id for point, endpts = endpoints of line
           print("--- ProjPt ---")
           #print(endpts)
@@ -355,7 +384,9 @@ shinyApp(
           draw_points(counter$image_number, input$length, input$direction)
         } else {
           clearAlign()
-          draw_mapedit(counter$image_number, input$length, input$direction)
+          draw_map(counter$image_number, input$length, input$direction)
+          draw_mapedit()
+          #draw_mapedit(counter$image_number, input$length, input$direction)
         }
       })
       
@@ -402,7 +433,7 @@ shinyApp(
             input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[2]]
           )
           print(AlignLine)
-          #lineID <<- input$LocalMap_draw_new_feature$properties$`_leaflet_id`
+          lineID <<- input$LocalMap_draw_new_feature$properties$`_leaflet_id`
         } ##  end draw poly
       }, ignoreNULL=TRUE)
         
@@ -424,14 +455,19 @@ shinyApp(
             print(paste("old point:", workingset$NewLong[workingset$id==pt],
                                       workingset$NewLat[workingset$id==pt]))
             print(paste("new point:", newpt[1], newpt[2]))
-            #####   delete below here
+            #####   add projected points to map
             leafletProxy("LocalMap") %>% 
               # aqua means selected
               addCircleMarkers(newpt[1],
                                newpt[2],
+                               group = "projected", 
                                radius=3, opacity=1, color="#0000FF")
-            #####  stop delete here
           }
+        }, ignoreNULL=TRUE)
+        ####################
+        ### Apply button ###
+        ####################
+        observeEvent(input$ApplyAlign, {
         }, ignoreNULL=TRUE)
         ############################
         ### RevertCurrent button ###
