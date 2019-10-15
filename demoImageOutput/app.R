@@ -90,6 +90,15 @@ saved <- logical(length=nrow(workingset))
 
 saved[workingset$SourceFile %in% anti_join(workingset, OldDF)$SourceFile] <- TRUE
 
+#   Move a few saved quantites to workingset
+
+mask <- OldDF$SourceFile %in% workingset$SourceFile # pick out records on OldDF that exist in workingset
+workingset$Quality <- OldDF$Quality[mask]
+workingset$EndLon <- OldDF$EndLon[mask]
+workingset$EndLat <- OldDF$EndLat[mask]
+
+SavePending<<-FALSE # flag to prevent leaving a tab with unfinished business
+
 #######################################################
 #   Javascript for removing polylines
 # https://github.com/bhaskarvk/leaflet.extras/issues/96
@@ -107,12 +116,11 @@ Shiny.addCustomMessageHandler(
   })
 "
 ))
-
+#map.invalidateSize()
 ##################################################
 # Define UI for displaying and annotating photos
 ##################################################
 
-# Demo of clicking, hovering, brushing with imageOutput
 # Note that coordinates are in pixels
 shinyApp(
     ui = basicPage(
@@ -128,7 +136,9 @@ shinyApp(
                                ),
                                brush = brushOpts(id = "brush")
                    ),
-                    HTML("<hr>"),
+                    conditionalPanel(
+                    condition = "input.tabs == 'AnnotateTab'",
+                    #HTML("<hr>"),
                     textOutput("SourceFile"),
                     #textOutput("LatLong"),
 
@@ -136,19 +146,21 @@ shinyApp(
                       actionButton("Prev", "Prev"),
                       actionButton("Next", "Next"),
                       actionButton("Rotate", "Rotate"),
-                      actionButton("Save", "Save"),
+                      actionButton("Save", "Save")),
                    HTML("<hr>"),
                    
                    #        Add map
                    
                    leafletOutput("LocalMap", height="45vh")
+                   #uiOutput("LocalMapDisplay")
+                   #leafletOutput("LocalMap", height="60vh"))
             ),
             
             #       Add left column with controls for labeling
             column(width = 4,
                    #    Quality, Length, and Direction
               tabsetPanel(id="tabs",
-                tabPanel("Annotate", fluid=TRUE,value="annotate",
+                tabPanel("Annotate", fluid=TRUE,value="AnnotateTab",
                    radioButtons("quality", label = "Sidewalk quality",
                                 choices = list("None selected" = "",
                                                "Good"="Good", "Bushes"="Bushes", 
@@ -171,7 +183,7 @@ shinyApp(
                                                "SE"="SE", "SW"="SW"), 
                                 selected = "N")
                 ), # end tabPanel Annotate
-                tabPanel("Align", fluid=TRUE, value="Aligntab",
+                tabPanel("Align", fluid=TRUE, value="AlignTab",
                          HTML("<hr>"),
                          tags$em("Pick the start and end points for alignment"),
                          tags$em("and then draw the line to move them to."),
@@ -183,9 +195,10 @@ shinyApp(
                          actionButton("ApplyAlign", "Apply"),
                          HTML("<hr>"),
                          actionButton("RevertCurrent", "Revert Current"),
-                         actionButton("RevertAll", "Revert All")
+                         actionButton("RevertAll", "Revert All"),
+                         actionButton("SaveAlign", "Save")
                 ), # end tabPanel Align
-                tabPanel("Move", fluid=TRUE, value="Movetab",
+                tabPanel("Move", fluid=TRUE, value="MoveTab",
                          HTML("<hr>"),
                          tags$em("Pick the point to be moved"),
                          tags$em("and then pick the destination."),
@@ -194,7 +207,8 @@ shinyApp(
                          actionButton("ClearMove", "Clear"),
                          actionButton("ApplyMove", "Apply"),
                          HTML("<hr>"),
-                         actionButton("RevertMove", "Revert Move")
+                         actionButton("RevertMove", "Revert Move"),
+                         actionButton("SaveMove", "Save")
                 )  # end tabPanel Move
             ) 
           )
@@ -207,7 +221,6 @@ shinyApp(
 
 
     server = function(input, output, session) {
-      
       
         #   Size of images from phone is 4032x3024
         #   Function to prep image
@@ -267,12 +280,24 @@ shinyApp(
                                         radius=3, opacity=1, color="#ff0000") %>% 
                        addPolylines(lng = LonLine, lat = LatLine)
         }  #  end of draw points
-        
+        ######################   draw endpoints and delete me
+        draw_ends <- function(){
+          for (i in 1:nrow(workingset)){
+              leafletProxy("LocalMap") %>% 
+                addPolylines(
+                  lat=c(workingset[i,]$NewLat, workingset[i,]$EndLat),
+                  lng=c(workingset[i,]$NewLong, workingset[i,]$EndLon),
+                  color="#FF0000",
+                  weight=2,
+                  opacity=1
+                )
+          }
+        }
         #########################################
         #   Draw a single point to highlight
         #########################################
-        draw_highlight <- function(ids){
-            temp <- workingset %>% filter(id %in% c(ids[1]:ids[length(ids)]))
+        draw_highlight <- function(ptids){
+            temp <- workingset %>% filter(id %in% c(ptids[1]:ptids[length(ptids)]))
             print(temp)
             leafletProxy("LocalMap") %>% 
                        clearGroup(group="align") %>% 
@@ -296,14 +321,27 @@ shinyApp(
         #########################################
         ####    Base Map
         #########################################
-        draw_map <- function(i, len, dir){
+        draw_map <- function(i){
+          print("==== draw map ====")
             lat <- workingset$NewLat[i]
             lon <- workingset$NewLong[i]
+            
+            #mapHeight <- "45vh"
+            #if (input$tabs!="AnnotateTab") {
+            #  mapHeight <- "60vh"
+            #}
 
+            #output$LocalMapDisplay=renderUI({
+            #  leafletOutput('LocalMap', height = mapHeight)
+            #})
+          Sys.sleep(.5) # to give map frame time to settle down so map will draw correctly
+            
+            #output$LocalMap = renderLeaflet(leaflet() %>% addTiles() %>% setView(-93.65, 42.0285, zoom = 17))
+            
             output$LocalMap <- renderLeaflet({
                 leaflet() %>%
-                       setView(lng = lon , lat = lat, zoom = zoom) %>% 
                        addTiles() %>%
+                       setView(lng = lon , lat = lat, zoom = zoom) %>% 
                        addCircleMarkers(workingset$NewLong, 
                                         workingset$NewLat,
                                         radius=3, opacity=1, color="#000000") 
@@ -311,8 +349,14 @@ shinyApp(
             }) 
         }  # end of draw_map
         #########################################
+        ###   Draw edit map for Align and Move
         #########################################
-        draw_mapedit <- function(){
+        draw_mapedit <- function(action){
+          if(action=="Align") {polyline <- drawPolylineOptions()
+                               marker <- FALSE
+          } else {polyline <- FALSE
+                  marker <- drawMarkerOptions()
+          }
               leafletProxy("LocalMap") %>% 
                        clearShapes() %>% 
                        clearGroup(group="projected") %>% 
@@ -326,13 +370,15 @@ shinyApp(
                                                                     textOnly = TRUE)) %>% 
               addDrawToolbar(
                 targetGroup='draw',
+                polylineOptions = polyline,
                 polygonOptions=FALSE,
                 circleOptions=FALSE,
                 circleMarkerOptions=FALSE,
                 rectangleOptions=FALSE,
-                markerOptions=FALSE,
+                markerOptions=marker,
                 singleFeature = TRUE,
-                editOptions = editToolbarOptions(selectedPathOptions = selectedPathOptions()))  %>%
+                editOptions = editToolbarOptions(selectedPathOptions = selectedPathOptions(),
+                                                 edit=FALSE, remove=FALSE))  %>%
                 addLayersControl(overlayGroups = c('draw'), options =
                                    layersControlOptions(collapsed=FALSE))
               
@@ -347,7 +393,7 @@ shinyApp(
             ~lat, ~lon
           )
           output$EndPoints <<- renderText("No points picked")
-          draw_mapedit()
+          draw_mapedit("Align")
           AlignLine <<- AlignLine[0,]
           if (!is.null(lineID)){ 
             session$sendCustomMessage(
@@ -359,11 +405,9 @@ shinyApp(
         }
         
         #########################################
-        ####  Find project of point onto line
+        ####  Find projection of point onto line
         #########################################
         ProjPt <- function(pt_id, endpts){ # id = id for point, endpts = endpoints of line
-          print("--- ProjPt ---")
-          #print(endpts)
           px <- workingset$NewLong[workingset$id==pt_id]
           py <- workingset$NewLat[workingset$id==pt_id]
           dot <- (endpts[2,]$x - endpts[1,]$x)*(px - endpts[1,]$x) +
@@ -379,16 +423,31 @@ shinyApp(
         ##############
       observeEvent(input$tabs, { # change map based on tab exposed
         print(paste("tab:", input$tabs))  
-        if (input$tabs=="annotate") {
-          draw_map(counter$image_number, input$length, input$direction)
+        if (input$tabs=="AnnotateTab") {
+          if (SavePending) {
+            showNotification("Must Save or Clear")
+            return()
+          }
+          draw_map(counter$image_number)
           draw_points(counter$image_number, input$length, input$direction)
+        } else if (input$tabs=="AlignTab") {
+          if (SavePending) {
+            showNotification("Must Save or Clear")
+            return()
+          }
+          draw_map(counter$image_number)
+          draw_mapedit("Align")
+          pt_ids <<- c()
         } else {
-          clearAlign()
-          draw_map(counter$image_number, input$length, input$direction)
-          draw_mapedit()
-          #draw_mapedit(counter$image_number, input$length, input$direction)
+          if (SavePending) {
+            showNotification("Must Save or Clear")
+            return()
+          }
+          draw_map(counter$image_number)
+          draw_mapedit("Move")
+          
         }
-      })
+      }, ignoreNULL=FALSE, ignoreInit=TRUE)
       
         ####################
         ### marker click ###
@@ -408,14 +467,14 @@ shinyApp(
           if (pt_ids[1]==click[[1]]) {return()}  # can't set end = start
           pt_ids <<- append(pt_ids, click[[1]])
           output$EndPoints <<- renderText(paste("Start:",pt_ids[1], "End:", pt_ids[2]))
-        } else {
-          pt_ids[1] <<- click[[1]]
+        } else { # first point
+          pt_ids <<- c(click[[1]])
           output$EndPoints <<- renderText(paste("Start:",pt_ids[1]))
         }
         draw_highlight(pt_ids)
         print(paste("pt_ids:", pt_ids))
         
-      })   
+      }, ignoreNULL=FALSE, ignoreInit=TRUE)   
       
         #################
         ### Draw Line ###
@@ -435,26 +494,24 @@ shinyApp(
           print(AlignLine)
           lineID <<- input$LocalMap_draw_new_feature$properties$`_leaflet_id`
         } ##  end draw poly
-      }, ignoreNULL=TRUE)
+      }, ignoreNULL=FALSE, ignoreInit=TRUE)
         
         #########################
         ### ClearAlign button ###
         #########################
         observeEvent(input$ClearAlign, {
-            clearAlign()
+          clearAlign()
+          pt_ids <<- c()
+          SavePending<<-FALSE
          }, ignoreNULL=TRUE)
         
         #########################
         ### Align button ###
         #########################
         observeEvent(input$Align, {
-          print(AlignLine)
-          for (pt in c(pt_ids[1]:pt_ids[length(ids)])) {
-            print(paste("--point id--", pt))
+          print(paste("Align Button:", AlignLine))
+          for (pt in c(pt_ids[1]:pt_ids[length(pt_ids)])) {
             newpt <- ProjPt(pt, AlignLine) # id = id for point, endpts = endpoints of line
-            print(paste("old point:", workingset$NewLong[workingset$id==pt],
-                                      workingset$NewLat[workingset$id==pt]))
-            print(paste("new point:", newpt[1], newpt[2]))
             #####   add projected points to map
             leafletProxy("LocalMap") %>% 
               # aqua means selected
@@ -468,61 +525,96 @@ shinyApp(
         ### Apply button ###
         ####################
         observeEvent(input$ApplyAlign, {
+          print("--- apply ---")
+          for (pt in c(pt_ids[1]:pt_ids[length(pt_ids)])) {
+            newpt <- ProjPt(pt, AlignLine) # id = id for point, endpts = endpoints of line
+            workingset$NewLong[workingset$id==pt] <<- newpt[1] 
+            workingset$NewLat[workingset$id==pt] <<- newpt[2]
+            #     Also need to move EndLon and EndLat
+print(paste("endpts before", workingset$EndLon[workingset$id==pt], workingset$EndLat[workingset$id==pt]))
+            workingset$EndLon[workingset$id==pt] <<- newpt[1] -
+                                                     workingset$GPSLongitude[workingset$id==pt] +
+                                                     workingset$EndLon[workingset$id==pt]
+            workingset$EndLat[workingset$id==pt] <<- newpt[2] -
+                                                     workingset$GPSLatitude[workingset$id==pt] +
+                                                     workingset$EndLat[workingset$id==pt]
+print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$EndLat[workingset$id==pt]))
+          }
+          draw_map(counter$image_number)
+          draw_mapedit("Align")
+          draw_ends() ### delete me
+          SavePending<<-TRUE
         }, ignoreNULL=TRUE)
         ############################
         ### RevertCurrent button ###
         ############################
         observeEvent(input$RevertCurrent, {
-          workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$NewLat <- 
-                     workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$GPSLatitude
-          workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$NewLong <- 
-                     workingset[workingset$id %in% c(ids[1]:ids[length(ids)]),]$GPSLongitude
+          print("--- revert ---")
+          workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$NewLat <<- 
+                     workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$GPSLatitude
+          workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$NewLong <<- 
+                     workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$GPSLongitude
+          SavePending<<-FALSE
+          draw_map(counter$image_number)
+          draw_mapedit("Align")
         }, ignoreNULL=TRUE)
         ########################
         ### RevertAll button ###
         ########################
         observeEvent(input$RevertAll, {
-          workingset$NewLong <- workingset$GPSLongitude
-          workingset$NewLat <- workingset$GPSLatitude
+          workingset$NewLong <<- workingset$GPSLongitude
+          workingset$NewLat <<- workingset$GPSLatitude
+          SavePending<<-FALSE
+          draw_map(counter$image_number)
+          draw_mapedit("Align")
           
+        }, ignoreNULL=TRUE)  
+        ########################
+        ### SaveAlign button ###
+        ########################
+        observeEvent(input$SaveAlign, {
+          if (!SavePending) {
+              showNotification("Must Apply before Saving")
+            return()
+          }
+          print("--- SaveAlign ---")
+
+          #   Update OldDF with new points
+          for (i in pt_ids[1]:pt_ids[length(pt_ids)]) {
+            maskWork <- workingset$id == i
+            maskOld <- OldDF$SourceFile==workingset[maskWork,]$SourceFile
+            OldDF$EndLon[maskOld] <- workingset$EndLon[maskWork]
+            OldDF$EndLat[maskOld] <- workingset$EndLat[maskWork]
+            OldDF$NewLong[maskOld] <- workingset$NewLong[maskWork]
+            OldDF$NewLat[maskOld] <- workingset$NewLat[maskWork]
+          }
+          #   Write OldDF out to permanent file
+          saveRDS(OldDF, oldfile)
+          #   Reset flags
+          pt_ids <<- c()
+          SavePending<<-FALSE
         }, ignoreNULL=TRUE)  
         
         
-        
-        # Start of Drawing
-        #observeEvent(input$LocalMap_draw_start, {
-        #  print("------------------Start of drawing")
-        #  print(input$LocalMap_draw_start)
-        #})
-        
-        # Stop of Drawing
-        #observeEvent(input$LocalMap_draw_stop, {
-        #  print("------------------Stopped drawing")
-        #  print(input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[1]])
-        #  print(input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[2]])
-        #  print(input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[1]])
-        #  print(input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[2]])
-        #})
-        
         # New Feature
-        observeEvent(input$LocalMap_draw_new_feature, {
-          print("------------------New Feature")
-          print(input$LocalMap_draw_new_feature)
+        #observeEvent(input$LocalMap_draw_new_feature, {
+        #  print("------------------New Feature")
+        #  print(input$LocalMap_draw_new_feature)
           #print(input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[1]])
           #print(input$LocalMap_draw_new_feature$geometry$coordinates[[1]][[2]])
           #print(input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[1]])
           #print(input$LocalMap_draw_new_feature$geometry$coordinates[[2]][[2]])
-        })
+        #})
         
         # Edited Features
-        observeEvent(input$LocalMap_draw_edited_features, {
-          print("------------------Edited Features")
+        #observeEvent(input$LocalMap_draw_edited_features, {
+          #print("------------------Edited Features")
           #print(input$LocalMap_draw_edited_features)
-          print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[1]][[1]])
-          print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[1]][[2]])
-          print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[2]][[1]])
-          print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[2]][[2]])
-        })
+          #print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[1]][[1]])
+          #print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[1]][[2]])
+          #print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[2]][[1]])
+          #print(input$LocalMap_draw_edited_features$features[[1]]$geometry$coordinates[[2]][[2]])
+        #})
         #observeEvent(input$LocalMap_draw_all_features, {
         #  print("------------------All Features")
         #  print(input$LocalMap_draw_all_features)
@@ -568,7 +660,8 @@ shinyApp(
             }
             counter$image_number <- min(length(image_list), counter$image_number+1)
             output$image <- image_prep(image_list[counter$image_number])
-            draw_map(counter$image_number, input$length, input$direction)
+            #draw_map(counter$image_number, input$length, input$direction)
+            draw_map(counter$image_number)
             draw_points(counter$image_number, input$length, input$direction)
             output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
             output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
@@ -586,7 +679,8 @@ shinyApp(
             }
             counter$image_number <- max(1, counter$image_number-1)
             output$image <- image_prep(image_list[counter$image_number])
-            draw_map(counter$image_number, input$length, input$direction)
+            #draw_map(counter$image_number, input$length, input$direction)
+            draw_map(counter$image_number)
             draw_points(counter$image_number, input$length, input$direction)
             output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
             output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
@@ -672,7 +766,8 @@ shinyApp(
                 saved[counter$image_number] <<- TRUE # flag image as saved
                 counter$image_number <<- min(length(image_list), counter$image_number+1)
                 output$image <- image_prep(image_list[counter$image_number])
-                draw_map(counter$image_number, input$length, input$direction)
+                #draw_map(counter$image_number, input$length, input$direction)
+                draw_map(counter$image_number)
                 draw_points(counter$image_number, input$length, input$direction)
                 if (counter$image_number == length(image_list)){
                   showNotification("Last image in set")
@@ -682,5 +777,3 @@ shinyApp(
     }
 )
 
-#print("This is where I can do some cleanup work")
-#print(paste("saved", saved))
