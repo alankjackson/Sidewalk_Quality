@@ -96,6 +96,8 @@ mask <- OldDF$SourceFile %in% workingset$SourceFile # pick out records on OldDF 
 workingset$Quality <- OldDF$Quality[mask]
 workingset$EndLon <- OldDF$EndLon[mask]
 workingset$EndLat <- OldDF$EndLat[mask]
+workingset$NewLong <- OldDF$NewLong[mask]
+workingset$NewLat <- OldDF$NewLat[mask]
 
 SavePending<<-FALSE # flag to prevent leaving a tab with unfinished business
 
@@ -116,7 +118,7 @@ Shiny.addCustomMessageHandler(
   })
 "
 ))
-#map.invalidateSize()
+#map.invalidateSize() # if I knew where to put this to ensure tiles get drawn
 ##################################################
 # Define UI for displaying and annotating photos
 ##################################################
@@ -146,7 +148,8 @@ shinyApp(
                       actionButton("Prev", "Prev"),
                       actionButton("Next", "Next"),
                       actionButton("Rotate", "Rotate"),
-                      actionButton("Save", "Save")),
+                      actionButton("Save", "Save"),
+                      actionButton("Ends", "Ends")),
                    HTML("<hr>"),
                    
                    #        Add map
@@ -280,7 +283,9 @@ shinyApp(
                                         radius=3, opacity=1, color="#ff0000") %>% 
                        addPolylines(lng = LonLine, lat = LatLine)
         }  #  end of draw points
-        ######################   draw endpoints and delete me
+        #########################################
+        #   Draw lines to endpoints
+        #########################################
         draw_ends <- function(){
           for (i in 1:nrow(workingset)){
               leafletProxy("LocalMap") %>% 
@@ -326,17 +331,7 @@ shinyApp(
             lat <- workingset$NewLat[i]
             lon <- workingset$NewLong[i]
             
-            #mapHeight <- "45vh"
-            #if (input$tabs!="AnnotateTab") {
-            #  mapHeight <- "60vh"
-            #}
-
-            #output$LocalMapDisplay=renderUI({
-            #  leafletOutput('LocalMap', height = mapHeight)
-            #})
           Sys.sleep(.5) # to give map frame time to settle down so map will draw correctly
-            
-            #output$LocalMap = renderLeaflet(leaflet() %>% addTiles() %>% setView(-93.65, 42.0285, zoom = 17))
             
             output$LocalMap <- renderLeaflet({
                 leaflet() %>%
@@ -540,7 +535,8 @@ print(paste("endpts before", workingset$EndLon[workingset$id==pt], workingset$En
                                                      workingset$EndLat[workingset$id==pt]
 print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$EndLat[workingset$id==pt]))
           }
-          draw_map(counter$image_number)
+          #draw_map(counter$image_number)
+          draw_map(as.numeric(pt)) ###############################  untested
           draw_mapedit("Align")
           draw_ends() ### delete me
           SavePending<<-TRUE
@@ -630,6 +626,14 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
         }
         
         ##############
+        ### Ends   ###
+        ##############
+        observeEvent(input$Ends, {
+            #draw_map(counter$image_number, input$length, input$direction)
+            draw_ends()
+         }, ignoreNULL=FALSE)
+        
+        ##############
         ### length ###
         ##############
         observeEvent(input$length, {
@@ -663,7 +667,7 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
             #draw_map(counter$image_number, input$length, input$direction)
             draw_map(counter$image_number)
             draw_points(counter$image_number, input$length, input$direction)
-            output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
+            output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
             output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
                                           workingset[counter$image_number,]$NewLong))
          }, ignoreNULL=FALSE)
@@ -682,7 +686,8 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
             #draw_map(counter$image_number, input$length, input$direction)
             draw_map(counter$image_number)
             draw_points(counter$image_number, input$length, input$direction)
-            output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
+            output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
+            #output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
             output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
                                           workingset[counter$image_number,]$NewLong))
          }, ignoreNULL=TRUE)
@@ -728,6 +733,8 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
                 OldDF$Quality[mask] <<- input$quality
                 OldDF$Length[mask] <<- input$length
                 OldDF$Direction[mask] <<- input$direction
+                OldDF$NewLong[mask] <<- workingset$NewLong[counter$image_number]
+                OldDF$NewLat[mask] <<- workingset$NewLat[counter$image_number]
                 OldDF$EndLon[mask] <<- workingset$EndLon[counter$image_number]
                 OldDF$EndLat[mask] <<- workingset$EndLat[counter$image_number]
                 
