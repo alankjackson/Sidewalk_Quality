@@ -50,7 +50,7 @@ workingset <- select(dat,
     mutate(SourceFile=str_extract(SourceFile, "[A-Z0-9_]*.jpg$")) %>% # just filename
     mutate(Quality="Not Set", Length=0, Direction="Not Set") %>% 
     mutate(EndLon=GPSLongitude, EndLat=GPSLatitude) %>% 
-    mutate(NewLat=GPSLatitude, NewLong=GPSLongitude)
+    mutate(NewLat=GPSLatitude, NewLon=GPSLongitude)
 
 image_list <- paste0(rawpath,"/",workingset$SourceFile) # make sure image_list sort same as workingset
 
@@ -71,7 +71,7 @@ if (file.exists(oldfile)){
                     EndLon=numeric(),
                     EndLat=numeric(),
                     NewLat=numeric(),
-                    NewLong=numeric())
+                    NewLon=numeric())
 }
 
 #   Join new data to old file - but only new records
@@ -96,7 +96,7 @@ mask <- OldDF$SourceFile %in% workingset$SourceFile # pick out records on OldDF 
 workingset$Quality <- OldDF$Quality[mask]
 workingset$EndLon <- OldDF$EndLon[mask]
 workingset$EndLat <- OldDF$EndLat[mask]
-workingset$NewLong <- OldDF$NewLong[mask]
+workingset$NewLon <- OldDF$NewLon[mask]
 workingset$NewLat <- OldDF$NewLat[mask]
 
 SavePending<<-FALSE # flag to prevent leaving a tab with unfinished business
@@ -145,15 +145,25 @@ shinyApp(
                     #textOutput("LatLong"),
 
                     HTML("<hr>"),
-                      actionButton("Prev", "Prev"),
-                      actionButton("Next", "Next"),
-                      actionButton("Rotate", "Rotate"),
-                      actionButton("Save", "Save"),
-                      actionButton("Ends", "Ends")),
+                    div(style="display: inline-block;vertical-align:top; width: 70px;", 
+                        actionButton("Prev", "Prev")),
+                    div(style="display: inline-block;vertical-align:top; width: 70px;",  
+                        actionButton("Next", "Next")),
+                    div(style="display: inline-block;vertical-align:top; width: 80px;",   
+                        actionButton("Rotate", "Rotate")),
+                    div(style="display: inline-block;vertical-align:top; width: 80px;",  
+                        actionButton("Save", "Save")),
+                    div(style="display: inline-block;vertical-align:top; width: 70px;",  
+                        checkboxInput("Ends", label = "Ends", value = FALSE)),
+                    div(style="display: inline-block;vertical-align:top; width: 80px;", 
+                        checkboxInput("EditDB", label = "Edit DB", value = FALSE))
+                ),
+                  #actionButton("Ends", "Ends")),
                    HTML("<hr>"),
                    
                    #        Add map
                    
+                   tags$script(HTML("LocalMap.invalidateSize()")),
                    leafletOutput("LocalMap", height="45vh")
                    #uiOutput("LocalMapDisplay")
                    #leafletOutput("LocalMap", height="60vh"))
@@ -248,7 +258,7 @@ shinyApp(
         #########################################
         draw_points <- function(i, len, dir){
             lat <- workingset$NewLat[i]
-            lon <- workingset$NewLong[i]
+            lon <- workingset$NewLon[i]
             latlon <- len/340000. # distance in lat long space
             newcoord <- case_when(
                 dir == "N" ~ list(lat+latlon, lon),
@@ -269,12 +279,12 @@ shinyApp(
             leafletProxy("LocalMap") %>% 
                        clearShapes() %>% 
                               # aqua means one of next five to be done
-                       addCircleMarkers(workingset[nextfive,]$NewLong, 
+                       addCircleMarkers(workingset[nextfive,]$NewLon, 
                                         workingset[nextfive,]$NewLat,
                                         radius=3, opacity=1, color="#00FFFF",
                                         layerId = workingset[nextfive,]$id) %>% 
                               # green means already done
-                       addCircleMarkers(workingset[saved,]$NewLong, 
+                       addCircleMarkers(workingset[saved,]$NewLon, 
                                         workingset[saved,]$NewLat,
                                         radius=3, opacity=1, color="#008000",
                                         layerId = workingset[saved,]$id) %>% 
@@ -291,9 +301,10 @@ shinyApp(
               leafletProxy("LocalMap") %>% 
                 addPolylines(
                   lat=c(workingset[i,]$NewLat, workingset[i,]$EndLat),
-                  lng=c(workingset[i,]$NewLong, workingset[i,]$EndLon),
+                  lng=c(workingset[i,]$NewLon, workingset[i,]$EndLon),
                   color="#FF0000",
                   weight=2,
+                  group="ends",
                   opacity=1
                 )
           }
@@ -306,7 +317,7 @@ shinyApp(
             print(temp)
             leafletProxy("LocalMap") %>% 
                        clearGroup(group="align") %>% 
-                       addCircleMarkers(workingset$NewLong, 
+                       addCircleMarkers(workingset$NewLon, 
                                         workingset$NewLat,
                                         radius=3, opacity=1, color="#000000", 
                                         layerId = workingset$id,
@@ -316,7 +327,7 @@ shinyApp(
                                                                     offset=c(18,0), 
                                                                     textOnly = TRUE)) %>% 
                               # aqua means selected
-                       addCircleMarkers(temp$NewLong, 
+                       addCircleMarkers(temp$NewLon, 
                                         temp$NewLat,
                                         radius=3, opacity=1, color="#00FFFF",
                                         layerId = temp$id,
@@ -329,7 +340,7 @@ shinyApp(
         draw_map <- function(i){
           print("==== draw map ====")
             lat <- workingset$NewLat[i]
-            lon <- workingset$NewLong[i]
+            lon <- workingset$NewLon[i]
             
           Sys.sleep(.5) # to give map frame time to settle down so map will draw correctly
             
@@ -337,8 +348,9 @@ shinyApp(
                 leaflet() %>%
                        addTiles() %>%
                        setView(lng = lon , lat = lat, zoom = zoom) %>% 
-                       addCircleMarkers(workingset$NewLong, 
+                       addCircleMarkers(workingset$NewLon, 
                                         workingset$NewLat,
+                                        layerId = workingset$id, 
                                         radius=3, opacity=1, color="#000000") 
 
             }) 
@@ -355,7 +367,7 @@ shinyApp(
               leafletProxy("LocalMap") %>% 
                        clearShapes() %>% 
                        clearGroup(group="projected") %>% 
-                       addCircleMarkers(workingset$NewLong, 
+                       addCircleMarkers(workingset$NewLon, 
                                         workingset$NewLat,
                                         radius=3, opacity=1, color="#000000", 
                                         layerId = workingset$id,
@@ -403,7 +415,7 @@ shinyApp(
         ####  Find projection of point onto line
         #########################################
         ProjPt <- function(pt_id, endpts){ # id = id for point, endpts = endpoints of line
-          px <- workingset$NewLong[workingset$id==pt_id]
+          px <- workingset$NewLon[workingset$id==pt_id]
           py <- workingset$NewLat[workingset$id==pt_id]
           dot <- (endpts[2,]$x - endpts[1,]$x)*(px - endpts[1,]$x) +
                  (endpts[2,]$y - endpts[1,]$y)*(py - endpts[1,]$y)
@@ -413,6 +425,33 @@ shinyApp(
           
         }
 
+        #########################################
+        ####  Move to work on a new image
+        #########################################
+        GoToImage <- function(){
+          output$image <- image_prep(image_list[counter$image_number])
+          draw_map(counter$image_number)
+          draw_points(counter$image_number, input$length, input$direction)
+          output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
+          output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
+                                              workingset[counter$image_number,]$NewLon))
+        }
+
+        #########################################
+        ####  Move a point to a new location
+        #########################################
+        MovePoint <- function(pt_id, newlat, newlon) {
+          workingset$NewLon[workingset$id==pt_id] <<- newlon 
+          workingset$NewLat[workingset$id==pt_id] <<- newlat
+          #     Also need to move EndLon and EndLat
+          workingset$EndLon[workingset$id==pt_id] <<- newlon -
+            workingset$GPSLongitude[workingset$id==pt_id] +
+            workingset$EndLon[workingset$id==pt_id]
+          workingset$EndLat[workingset$id==pt_id] <<- newlat -
+            workingset$GPSLatitude[workingset$id==pt_id] +
+            workingset$EndLat[workingset$id==pt_id]
+        }
+        
         ##############
         #### tabs ####
         ##############
@@ -449,31 +488,48 @@ shinyApp(
         ####################
       observeEvent(input$LocalMap_marker_click, {
         click <- input$LocalMap_marker_click
-        if(is.null(click) | (input$tabs=="annotate")) # only respond if on correct tab
+        
+        if(is.null(click[[1]])) { # only respond if not null
           return()
-        print(paste("click ", click[[1]]))
-        #   Change color to show selected and store id
-        #   Only store a max of 2 ID's. Overwrite second one if needed
-        if (length(pt_ids)==2){
-          if (pt_ids[1]==click[[1]]) {return()}  # can't set end = start
-          pt_ids[2] <<- click[[1]]
-          output$EndPoints <<- renderText(paste("Start:",pt_ids[1], "End:", pt_ids[2]))
-        } else if (length(pt_ids)==1) {
-          if (pt_ids[1]==click[[1]]) {return()}  # can't set end = start
-          pt_ids <<- append(pt_ids, click[[1]])
-          output$EndPoints <<- renderText(paste("Start:",pt_ids[1], "End:", pt_ids[2]))
-        } else { # first point
-          pt_ids <<- c(click[[1]])
-          output$EndPoints <<- renderText(paste("Start:",pt_ids[1]))
         }
-        draw_highlight(pt_ids)
-        print(paste("pt_ids:", pt_ids))
+        print(paste("click ", click))
+        
+          #   Annotate Tab 
+        if (input$tabs=="AnnotateTab") {
+          counter$image_number <- as.numeric(click[[1]])
+          GoToImage()
+        }
+          #   Align Tab
+        else if (input$tabs=="AlignTab") {
+          #   Change color to show selected and store id
+          #   Only store a max of 2 ID's. Overwrite second one if needed
+          if (length(pt_ids)==2){
+            if (pt_ids[1]==click[[1]]) {return()}  # can't set end = start
+            pt_ids[2] <<- click[[1]]
+            output$EndPoints <<- renderText(paste("Start:",pt_ids[1], "End:", pt_ids[2]))
+          } else if (length(pt_ids)==1) {
+            if (pt_ids[1]==click[[1]]) {return()}  # can't set end = start
+            pt_ids <<- append(pt_ids, click[[1]])
+            output$EndPoints <<- renderText(paste("Start:",pt_ids[1], "End:", pt_ids[2]))
+          } else { # first point
+            pt_ids <<- c(click[[1]])
+            output$EndPoints <<- renderText(paste("Start:",pt_ids[1]))
+          }
+          draw_highlight(pt_ids)
+          print(paste("pt_ids:", pt_ids))
+        }
+          #   Move Tab
+        else {
+            pt_ids <<- c(click[[1]])
+            draw_highlight(pt_ids)
+            output$EndPoints <<- renderText(paste("Move:",pt_ids[1]))
+        }
         
       }, ignoreNULL=FALSE, ignoreInit=TRUE)   
       
-        #################
-        ### Draw Line ###
-        ################# 
+        #################################
+        ### Draw Line or place marker ###
+        #################################
       #observeEvent(input$LocalMap_draw_stop, { # fails on second use
       observeEvent(input$LocalMap_draw_new_feature, {
         if (input$LocalMap_draw_new_feature$properties$feature_type=="polyline"){
@@ -489,6 +545,18 @@ shinyApp(
           print(AlignLine)
           lineID <<- input$LocalMap_draw_new_feature$properties$`_leaflet_id`
         } ##  end draw poly
+        else if (input$LocalMap_draw_new_feature$properties$feature_type=="marker") {
+          print("------- place marker --------")
+          ###   move point to marker location
+          MovePoint(pt_ids, input$LocalMap_draw_new_feature$geometry$coordinates[[2]],
+                            input$LocalMap_draw_new_feature$geometry$coordinates[[1]])
+          leafletProxy("LocalMap") %>% 
+              # aqua means selected
+              addCircleMarkers(workingset[workingset$id==pt_ids,]$NewLat,
+                               workingset[workingset$id==pt_ids,]$NewLon,
+                               group = "moved", 
+                               radius=3, opacity=1, color="#0000FF")
+        }
       }, ignoreNULL=FALSE, ignoreInit=TRUE)
         
         #########################
@@ -516,6 +584,7 @@ shinyApp(
                                radius=3, opacity=1, color="#0000FF")
           }
         }, ignoreNULL=TRUE)
+        
         ####################
         ### Apply button ###
         ####################
@@ -523,22 +592,22 @@ shinyApp(
           print("--- apply ---")
           for (pt in c(pt_ids[1]:pt_ids[length(pt_ids)])) {
             newpt <- ProjPt(pt, AlignLine) # id = id for point, endpts = endpoints of line
-            workingset$NewLong[workingset$id==pt] <<- newpt[1] 
-            workingset$NewLat[workingset$id==pt] <<- newpt[2]
+            MovePoint(pt, newpt[2], newpt[1] )
+            #workingset$NewLon[workingset$id==pt] <<- newpt[1] 
+            #workingset$NewLat[workingset$id==pt] <<- newpt[2]
             #     Also need to move EndLon and EndLat
 print(paste("endpts before", workingset$EndLon[workingset$id==pt], workingset$EndLat[workingset$id==pt]))
-            workingset$EndLon[workingset$id==pt] <<- newpt[1] -
-                                                     workingset$GPSLongitude[workingset$id==pt] +
-                                                     workingset$EndLon[workingset$id==pt]
-            workingset$EndLat[workingset$id==pt] <<- newpt[2] -
-                                                     workingset$GPSLatitude[workingset$id==pt] +
-                                                     workingset$EndLat[workingset$id==pt]
+            #workingset$EndLon[workingset$id==pt] <<- newpt[1] -
+            #                                         workingset$GPSLongitude[workingset$id==pt] +
+            #                                         workingset$EndLon[workingset$id==pt]
+            #workingset$EndLat[workingset$id==pt] <<- newpt[2] -
+            #                                         workingset$GPSLatitude[workingset$id==pt] +
+            #                                         workingset$EndLat[workingset$id==pt]
 print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$EndLat[workingset$id==pt]))
           }
-          #draw_map(counter$image_number)
-          draw_map(as.numeric(pt)) ###############################  untested
+          draw_map(as.numeric(pt)) 
           draw_mapedit("Align")
-          draw_ends() ### delete me
+          draw_ends() 
           SavePending<<-TRUE
         }, ignoreNULL=TRUE)
         ############################
@@ -548,7 +617,7 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
           print("--- revert ---")
           workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$NewLat <<- 
                      workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$GPSLatitude
-          workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$NewLong <<- 
+          workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$NewLon <<- 
                      workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$GPSLongitude
           SavePending<<-FALSE
           draw_map(counter$image_number)
@@ -558,7 +627,7 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
         ### RevertAll button ###
         ########################
         observeEvent(input$RevertAll, {
-          workingset$NewLong <<- workingset$GPSLongitude
+          workingset$NewLon <<- workingset$GPSLongitude
           workingset$NewLat <<- workingset$GPSLatitude
           SavePending<<-FALSE
           draw_map(counter$image_number)
@@ -579,9 +648,10 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
           for (i in pt_ids[1]:pt_ids[length(pt_ids)]) {
             maskWork <- workingset$id == i
             maskOld <- OldDF$SourceFile==workingset[maskWork,]$SourceFile
+            print(paste("--- SaveAlign ---", i, sum(maskOld), sum(maskWork) ))
             OldDF$EndLon[maskOld] <- workingset$EndLon[maskWork]
             OldDF$EndLat[maskOld] <- workingset$EndLat[maskWork]
-            OldDF$NewLong[maskOld] <- workingset$NewLong[maskWork]
+            OldDF$NewLon[maskOld] <- workingset$NewLon[maskWork]
             OldDF$NewLat[maskOld] <- workingset$NewLat[maskWork]
           }
           #   Write OldDF out to permanent file
@@ -630,7 +700,10 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
         ##############
         observeEvent(input$Ends, {
             #draw_map(counter$image_number, input$length, input$direction)
-            draw_ends()
+            if (input$Ends) {draw_ends()}
+            else {
+                leafletProxy("LocalMap") %>% clearGroup(group="ends")  
+            }
          }, ignoreNULL=FALSE)
         
         ##############
@@ -663,13 +736,13 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
               showNotification("Last image in set")
             }
             counter$image_number <- min(length(image_list), counter$image_number+1)
-            output$image <- image_prep(image_list[counter$image_number])
-            #draw_map(counter$image_number, input$length, input$direction)
-            draw_map(counter$image_number)
-            draw_points(counter$image_number, input$length, input$direction)
-            output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
-            output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
-                                          workingset[counter$image_number,]$NewLong))
+            GoToImage()
+          #  output$image <- image_prep(image_list[counter$image_number])
+          #  draw_map(counter$image_number)
+          #  draw_points(counter$image_number, input$length, input$direction)
+          #  output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
+          #  output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
+          #                                workingset[counter$image_number,]$NewLon))
          }, ignoreNULL=FALSE)
         
         
@@ -682,14 +755,13 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
               showNotification("First image in set")
             }
             counter$image_number <- max(1, counter$image_number-1)
-            output$image <- image_prep(image_list[counter$image_number])
-            #draw_map(counter$image_number, input$length, input$direction)
-            draw_map(counter$image_number)
-            draw_points(counter$image_number, input$length, input$direction)
-            output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
-            #output$SourceFile <<- renderText(workingset[counter$image_number,]$SourceFile)
-            output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
-                                          workingset[counter$image_number,]$NewLong))
+            GoToImage()
+            #output$image <- image_prep(image_list[counter$image_number])
+            #draw_map(counter$image_number)
+            #draw_points(counter$image_number, input$length, input$direction)
+            #output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
+            #output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
+            #                              workingset[counter$image_number,]$NewLon))
          }, ignoreNULL=TRUE)
         
         
@@ -722,7 +794,7 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
                     title = "Error",
                     "Choose a Quality label."
                 ))
-            } else if(is.null(input$brush)){ # you must crop
+            } else if(is.null(input$brush) & input$EditDB){ # you must crop
                 showModal(modalDialog(
                     title = "Error",
                     "You must crop image."
@@ -733,7 +805,7 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
                 OldDF$Quality[mask] <<- input$quality
                 OldDF$Length[mask] <<- input$length
                 OldDF$Direction[mask] <<- input$direction
-                OldDF$NewLong[mask] <<- workingset$NewLong[counter$image_number]
+                OldDF$NewLon[mask] <<- workingset$NewLon[counter$image_number]
                 OldDF$NewLat[mask] <<- workingset$NewLat[counter$image_number]
                 OldDF$EndLon[mask] <<- workingset$EndLon[counter$image_number]
                 OldDF$EndLat[mask] <<- workingset$EndLat[counter$image_number]
@@ -746,14 +818,15 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
                 
                 image <- image_read(imagefile$tmpfile)  # current view
                 
-                if(is.null(input$brush)){ # do not crop
+                if (!input$EditDB) {
+                  if(is.null(input$brush)){ # do not crop
                     image %>% 
                         image_strip() %>%  # remove exif headers
                         image_write( 
                                 path=paste0(savepath,"/",workingset$SourceFile[counter$image_number]), 
                                 format = 'jpg')
                     }
-                else { # Crop image
+                  else { # Crop image
                     geom <- 
                         geometry_area(width=input$brush$coords_img$xmax-input$brush$coords_img$xmin,
                                   height=input$brush$coords_img$ymax-input$brush$coords_img$ymin,
@@ -766,16 +839,17 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
                         image_write( 
                                 path=paste0(savepath,"/",workingset$SourceFile[counter$image_number]), 
                                 format = 'jpg')
+                  }
                 }
                 #       Reset to defaults
                 resetControls()
                 #       Go to Next
                 saved[counter$image_number] <<- TRUE # flag image as saved
                 counter$image_number <<- min(length(image_list), counter$image_number+1)
-                output$image <- image_prep(image_list[counter$image_number])
-                #draw_map(counter$image_number, input$length, input$direction)
-                draw_map(counter$image_number)
-                draw_points(counter$image_number, input$length, input$direction)
+                GoToImage()
+                #output$image <- image_prep(image_list[counter$image_number])
+                #draw_map(counter$image_number)
+                #draw_points(counter$image_number, input$length, input$direction)
                 if (counter$image_number == length(image_list)){
                   showNotification("Last image in set")
                 }
