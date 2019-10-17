@@ -176,7 +176,8 @@ shinyApp(
                 tabPanel("Annotate", fluid=TRUE,value="AnnotateTab",
                    radioButtons("quality", label = "Sidewalk quality",
                                 choices = list("None selected" = "",
-                                               "Good"="Good", "Bushes"="Bushes", 
+                                               "Good"="Good", "Acceptible"="Acceptible",
+                                               "Bushes"="Bushes", 
                                                "Gap"="Gap",  "Offset"="Offset", 
                                                "Shattered"="Shattered", 
                                                "Obstructed"="Obstructed", 
@@ -214,9 +215,10 @@ shinyApp(
                 tabPanel("Move", fluid=TRUE, value="MoveTab",
                          HTML("<hr>"),
                          tags$em("Pick the point to be moved"),
-                         tags$em("and then pick the destination."),
+                         tags$em("and then pick the destination with marker."),
                          HTML("<hr>"),
-                         actionButton("Move", "Move"),
+                         textOutput("MoveText"),
+                         HTML("<hr>"),
                          actionButton("ClearMove", "Clear"),
                          actionButton("ApplyMove", "Apply"),
                          HTML("<hr>"),
@@ -441,6 +443,9 @@ shinyApp(
         ####  Move a point to a new location
         #########################################
         MovePoint <- function(pt_id, newlat, newlon) {
+          print("Move Point")
+          print(paste(workingset$NewLon[workingset$id==pt_id], newlon))
+          print(paste(workingset$NewLat[workingset$id==pt_id], newlat))
           workingset$NewLon[workingset$id==pt_id] <<- newlon 
           workingset$NewLat[workingset$id==pt_id] <<- newlat
           #     Also need to move EndLon and EndLat
@@ -457,14 +462,14 @@ shinyApp(
         ##############
       observeEvent(input$tabs, { # change map based on tab exposed
         print(paste("tab:", input$tabs))  
-        if (input$tabs=="AnnotateTab") {
+        if (input$tabs=="AnnotateTab") { ##  Annotate Tab ##
           if (SavePending) {
             showNotification("Must Save or Clear")
             return()
           }
           draw_map(counter$image_number)
           draw_points(counter$image_number, input$length, input$direction)
-        } else if (input$tabs=="AlignTab") {
+        } else if (input$tabs=="AlignTab") { ##  Align Tab ##
           if (SavePending) {
             showNotification("Must Save or Clear")
             return()
@@ -472,14 +477,14 @@ shinyApp(
           draw_map(counter$image_number)
           draw_mapedit("Align")
           pt_ids <<- c()
-        } else {
+        } else {                             ## Move Tab ##
           if (SavePending) {
             showNotification("Must Save or Clear")
             return()
           }
           draw_map(counter$image_number)
           draw_mapedit("Move")
-          
+          pt_ids <<- c()
         }
       }, ignoreNULL=FALSE, ignoreInit=TRUE)
       
@@ -522,7 +527,7 @@ shinyApp(
         else {
             pt_ids <<- c(click[[1]])
             draw_highlight(pt_ids)
-            output$EndPoints <<- renderText(paste("Move:",pt_ids[1]))
+            output$MoveText <<- renderText(paste("Move:",pt_ids[1]))
         }
         
       }, ignoreNULL=FALSE, ignoreInit=TRUE)   
@@ -530,7 +535,7 @@ shinyApp(
         #################################
         ### Draw Line or place marker ###
         #################################
-      #observeEvent(input$LocalMap_draw_stop, { # fails on second use
+      #observeEvent(input$LocalMap_draw_stop, { # fails on second use, so don't use
       observeEvent(input$LocalMap_draw_new_feature, {
         if (input$LocalMap_draw_new_feature$properties$feature_type=="polyline"){
           print("------- draw line --------")
@@ -547,15 +552,7 @@ shinyApp(
         } ##  end draw poly
         else if (input$LocalMap_draw_new_feature$properties$feature_type=="marker") {
           print("------- place marker --------")
-          ###   move point to marker location
-          MovePoint(pt_ids, input$LocalMap_draw_new_feature$geometry$coordinates[[2]],
-                            input$LocalMap_draw_new_feature$geometry$coordinates[[1]])
-          leafletProxy("LocalMap") %>% 
-              # aqua means selected
-              addCircleMarkers(workingset[workingset$id==pt_ids,]$NewLat,
-                               workingset[workingset$id==pt_ids,]$NewLon,
-                               group = "moved", 
-                               radius=3, opacity=1, color="#0000FF")
+
         }
       }, ignoreNULL=FALSE, ignoreInit=TRUE)
         
@@ -585,9 +582,24 @@ shinyApp(
           }
         }, ignoreNULL=TRUE)
         
-        ####################
-        ### Apply button ###
-        ####################
+        #########################
+        ### Apply Move button ###
+        #########################
+        observeEvent(input$ApplyMove, {
+          print("--- apply move ---")
+          ###   move point to marker location
+          MovePoint(pt_ids, input$LocalMap_draw_new_feature$geometry$coordinates[[2]],
+                            input$LocalMap_draw_new_feature$geometry$coordinates[[1]])
+
+          draw_map(as.numeric(pt_ids[1])) 
+          draw_mapedit("Move")
+          draw_ends() 
+          draw_highlight(pt_ids[1])
+          SavePending<<-TRUE
+        }, ignoreNULL=TRUE)
+        ##########################
+        ### Apply Align button ###
+        ##########################
         observeEvent(input$ApplyAlign, {
           print("--- apply ---")
           for (pt in c(pt_ids[1]:pt_ids[length(pt_ids)])) {
@@ -794,7 +806,7 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
                     title = "Error",
                     "Choose a Quality label."
                 ))
-            } else if(is.null(input$brush) & input$EditDB){ # you must crop
+            } else if(is.null(input$brush) & !input$EditDB){ # you must crop
                 showModal(modalDialog(
                     title = "Error",
                     "You must crop image."
@@ -818,7 +830,7 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
                 
                 image <- image_read(imagefile$tmpfile)  # current view
                 
-                if (!input$EditDB) {
+                if (!input$EditDB) { # skip if only database is to be updated
                   if(is.null(input$brush)){ # do not crop
                     image %>% 
                         image_strip() %>%  # remove exif headers
