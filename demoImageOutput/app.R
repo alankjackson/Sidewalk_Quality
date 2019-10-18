@@ -48,7 +48,7 @@ workingset <- select(dat,
                GPSLongitude, GPSLatitude) %>% 
     arrange(DateTimeOriginal) %>% 
     mutate(SourceFile=str_extract(SourceFile, "[A-Z0-9_]*.jpg$")) %>% # just filename
-    mutate(Quality="Not Set", Length=0, Direction="Not Set") %>% 
+    mutate(Quality="Not Set", Length=50, Direction="Not Set") %>% 
     mutate(EndLon=GPSLongitude, EndLat=GPSLatitude) %>% 
     mutate(NewLat=GPSLatitude, NewLon=GPSLongitude)
 
@@ -94,6 +94,8 @@ saved[workingset$SourceFile %in% anti_join(workingset, OldDF)$SourceFile] <- TRU
 
 mask <- OldDF$SourceFile %in% workingset$SourceFile # pick out records on OldDF that exist in workingset
 workingset$Quality <- OldDF$Quality[mask]
+workingset$Length <- OldDF$Length[mask]
+workingset$Direction <- OldDF$Direction[mask]
 workingset$EndLon <- OldDF$EndLon[mask]
 workingset$EndLat <- OldDF$EndLat[mask]
 workingset$NewLon <- OldDF$NewLon[mask]
@@ -437,6 +439,11 @@ shinyApp(
           output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
           output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
                                               workingset[counter$image_number,]$NewLon))
+          if (workingset[counter$image_number,]$Quality != "Not Set") {
+              updateCheckboxInput(session, "quality", value = workingset[counter$image_number,]$Quality)
+          }
+          updateCheckboxInput(session, "length", value = workingset[counter$image_number,]$Length)
+          updateCheckboxInput(session, "direction", value = workingset[counter$image_number,]$Direction)
         }
 
         #########################################
@@ -552,9 +559,13 @@ shinyApp(
         } ##  end draw poly
         else if (input$LocalMap_draw_new_feature$properties$feature_type=="marker") {
           print("------- place marker --------")
-
-        }
+          MarkerID <<- input$LocalMap_draw_new_feature$properties$`_leaflet_id`
+        } ## end draw marker
       }, ignoreNULL=FALSE, ignoreInit=TRUE)
+        
+        ###########################################################################
+        ############################  Align Controls ##############################
+        ###########################################################################
         
         #########################
         ### ClearAlign button ###
@@ -582,21 +593,6 @@ shinyApp(
           }
         }, ignoreNULL=TRUE)
         
-        #########################
-        ### Apply Move button ###
-        #########################
-        observeEvent(input$ApplyMove, {
-          print("--- apply move ---")
-          ###   move point to marker location
-          MovePoint(pt_ids, input$LocalMap_draw_new_feature$geometry$coordinates[[2]],
-                            input$LocalMap_draw_new_feature$geometry$coordinates[[1]])
-
-          draw_map(as.numeric(pt_ids[1])) 
-          draw_mapedit("Move")
-          draw_ends() 
-          draw_highlight(pt_ids[1])
-          SavePending<<-TRUE
-        }, ignoreNULL=TRUE)
         ##########################
         ### Apply Align button ###
         ##########################
@@ -672,6 +668,83 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
           pt_ids <<- c()
           SavePending<<-FALSE
         }, ignoreNULL=TRUE)  
+        
+        ##########################################################################
+        ############################  Move Controls ##############################
+        ##########################################################################
+        
+        #########################
+        ### Apply Move button ###
+        #########################
+        observeEvent(input$ApplyMove, {
+          print("--- apply move ---")
+          if (is.null(pt_ids)) {return}
+          ###   move point to marker location
+          MovePoint(pt_ids, input$LocalMap_draw_new_feature$geometry$coordinates[[2]],
+                            input$LocalMap_draw_new_feature$geometry$coordinates[[1]])
+
+          draw_map(as.numeric(pt_ids[1])) 
+          draw_mapedit("Move")
+          draw_ends() 
+          draw_highlight(pt_ids[1])
+          SavePending<<-TRUE
+        }, ignoreNULL=TRUE)
+        
+        #########################
+        ### ClearMove  button ###
+        #########################
+        observeEvent(input$ClearMove, {
+          if (!is.null(lineID)){ ##  remove marker from map
+            session$sendCustomMessage(
+              "removeleaflet",
+              list(elid="LocalMap", layerid=MarkerID)
+            )
+          }
+          pt_ids <<- c()
+          output$MoveText <<- renderText("No point picked")
+          draw_mapedit("Move")
+          SavePending<<-FALSE
+         }, ignoreNULL=TRUE)
+        
+        #########################
+        ### RevertMove button ###
+        #########################
+        observeEvent(input$RevertMove, {
+          print("--- revert move ---")
+          workingset[workingset$id == pt_ids[1],]$NewLat <<- 
+                     workingset[workingset$id == pt_ids[1],]$GPSLatitude
+          workingset[workingset$id == pt_ids[1],]$NewLon <<- 
+                     workingset[workingset$id == pt_ids[1],]$GPSLongitude
+          SavePending<<-FALSE
+          draw_map(as.numeric(pt_ids[1]))
+          draw_mapedit("Move")
+        }, ignoreNULL=TRUE)
+        
+        #######################
+        ### SaveMove button ###
+        #######################
+        observeEvent(input$SaveMove, {
+          if (!SavePending) {
+              showNotification("Must Apply before Saving")
+            return()
+          }
+          print("--- SaveMove ---")
+
+          #   Update OldDF with new points
+          maskWork <- workingset$id == pt_ids[1]
+          maskOld <- OldDF$SourceFile==workingset[maskWork,]$SourceFile
+          print(paste("--- SaveMove ---", pt_ids[1], sum(maskOld), sum(maskWork) ))
+          OldDF$EndLon[maskOld] <- workingset$EndLon[maskWork]
+          OldDF$EndLat[maskOld] <- workingset$EndLat[maskWork]
+          OldDF$NewLon[maskOld] <- workingset$NewLon[maskWork]
+          OldDF$NewLat[maskOld] <- workingset$NewLat[maskWork]
+          #   Write OldDF out to permanent file
+          saveRDS(OldDF, oldfile)
+          #   Reset flags
+          pt_ids <<- c()
+          SavePending<<-FALSE
+        }, ignoreNULL=TRUE)  
+        
         
         
         # New Feature
