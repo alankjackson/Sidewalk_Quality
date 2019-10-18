@@ -86,13 +86,17 @@ image_number <- 0 # initialize
 #   saved = True if photo has been saved
 saved <- logical(length=nrow(workingset))
 
+# pick out records on OldDF that exist in workingset
+
+mask <- OldDF$SourceFile %in% workingset$SourceFile 
+
 #   Flag records from workingset that are already done
 
-saved[workingset$SourceFile %in% anti_join(workingset, OldDF)$SourceFile] <- TRUE
+saved <- OldDF$Quality[mask]!="Not Set"
+#saved[workingset$SourceFile %in% anti_join(workingset, OldDF)$SourceFile] <- TRUE
 
 #   Move a few saved quantites to workingset
 
-mask <- OldDF$SourceFile %in% workingset$SourceFile # pick out records on OldDF that exist in workingset
 workingset$Quality <- OldDF$Quality[mask]
 workingset$Length <- OldDF$Length[mask]
 workingset$Direction <- OldDF$Direction[mask]
@@ -437,9 +441,12 @@ shinyApp(
                                               workingset[counter$image_number,]$NewLon))
           if (workingset[counter$image_number,]$Quality != "Not Set") {
               updateCheckboxInput(session, "quality", value = workingset[counter$image_number,]$Quality)
+              updateCheckboxInput(session, "length", value = workingset[counter$image_number,]$Length)
+              updateCheckboxInput(session, "direction", value = workingset[counter$image_number,]$Direction)
           }
-          updateCheckboxInput(session, "length", value = workingset[counter$image_number,]$Length)
-          updateCheckboxInput(session, "direction", value = workingset[counter$image_number,]$Direction)
+          else {updateCheckboxInput(session, "quality", value = "")}
+          #updateCheckboxInput(session, "length", value = workingset[counter$image_number,]$Length)
+          #updateCheckboxInput(session, "direction", value = workingset[counter$image_number,]$Direction)
         }
 
         #########################################
