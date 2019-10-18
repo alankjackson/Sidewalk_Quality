@@ -142,7 +142,6 @@ shinyApp(
                    ),
                     conditionalPanel(
                     condition = "input.tabs == 'AnnotateTab'",
-                    #HTML("<hr>"),
                     textOutput("SourceFile"),
                     #textOutput("LatLong"),
 
@@ -160,15 +159,12 @@ shinyApp(
                     div(style="display: inline-block;vertical-align:top; width: 80px;", 
                         checkboxInput("EditDB", label = "Edit DB", value = FALSE))
                 ),
-                  #actionButton("Ends", "Ends")),
                    HTML("<hr>"),
                    
                    #        Add map
                    
                    tags$script(HTML("LocalMap.invalidateSize()")),
                    leafletOutput("LocalMap", height="45vh")
-                   #uiOutput("LocalMapDisplay")
-                   #leafletOutput("LocalMap", height="60vh"))
             ),
             
             #       Add left column with controls for labeling
@@ -542,7 +538,7 @@ shinyApp(
         #################################
         ### Draw Line or place marker ###
         #################################
-      #observeEvent(input$LocalMap_draw_stop, { # fails on second use, so don't use
+      ###### observeEvent(input$LocalMap_draw_stop, { # fails on second use, so don't use
       observeEvent(input$LocalMap_draw_new_feature, {
         if (input$LocalMap_draw_new_feature$properties$feature_type=="polyline"){
           print("------- draw line --------")
@@ -601,17 +597,6 @@ shinyApp(
           for (pt in c(pt_ids[1]:pt_ids[length(pt_ids)])) {
             newpt <- ProjPt(pt, AlignLine) # id = id for point, endpts = endpoints of line
             MovePoint(pt, newpt[2], newpt[1] )
-            #workingset$NewLon[workingset$id==pt] <<- newpt[1] 
-            #workingset$NewLat[workingset$id==pt] <<- newpt[2]
-            #     Also need to move EndLon and EndLat
-print(paste("endpts before", workingset$EndLon[workingset$id==pt], workingset$EndLat[workingset$id==pt]))
-            #workingset$EndLon[workingset$id==pt] <<- newpt[1] -
-            #                                         workingset$GPSLongitude[workingset$id==pt] +
-            #                                         workingset$EndLon[workingset$id==pt]
-            #workingset$EndLat[workingset$id==pt] <<- newpt[2] -
-            #                                         workingset$GPSLatitude[workingset$id==pt] +
-            #                                         workingset$EndLat[workingset$id==pt]
-print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$EndLat[workingset$id==pt]))
           }
           draw_map(as.numeric(pt)) 
           draw_mapedit("Align")
@@ -784,7 +769,6 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
         ### Ends   ###
         ##############
         observeEvent(input$Ends, {
-            #draw_map(counter$image_number, input$length, input$direction)
             if (input$Ends) {draw_ends()}
             else {
                 leafletProxy("LocalMap") %>% clearGroup(group="ends")  
@@ -795,7 +779,6 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
         ### length ###
         ##############
         observeEvent(input$length, {
-            #draw_map(counter$image_number, input$length, input$direction)
             draw_points(counter$image_number, input$length, input$direction)
          }, ignoreNULL=FALSE)
         
@@ -803,7 +786,6 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
         ### direction ###
         #################
         observeEvent(input$direction, {
-            #draw_map(counter$image_number, input$length, input$direction)
             draw_points(counter$image_number, input$length, input$direction)
          }, ignoreNULL=FALSE)
         
@@ -822,12 +804,6 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
             }
             counter$image_number <- min(length(image_list), counter$image_number+1)
             GoToImage()
-          #  output$image <- image_prep(image_list[counter$image_number])
-          #  draw_map(counter$image_number)
-          #  draw_points(counter$image_number, input$length, input$direction)
-          #  output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
-          #  output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
-          #                                workingset[counter$image_number,]$NewLon))
          }, ignoreNULL=FALSE)
         
         
@@ -841,12 +817,6 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
             }
             counter$image_number <- max(1, counter$image_number-1)
             GoToImage()
-            #output$image <- image_prep(image_list[counter$image_number])
-            #draw_map(counter$image_number)
-            #draw_points(counter$image_number, input$length, input$direction)
-            #output$SourceFile <<- renderText(paste(workingset[counter$image_number,]$SourceFile, ":",workingset[counter$image_number,]$id))
-            #output$LatLong <<- renderText(paste(workingset[counter$image_number,]$NewLat,",",
-            #                              workingset[counter$image_number,]$NewLon))
          }, ignoreNULL=TRUE)
         
         
@@ -932,9 +902,6 @@ print(paste("endpts after ", workingset$EndLon[workingset$id==pt], workingset$En
                 saved[counter$image_number] <<- TRUE # flag image as saved
                 counter$image_number <<- min(length(image_list), counter$image_number+1)
                 GoToImage()
-                #output$image <- image_prep(image_list[counter$image_number])
-                #draw_map(counter$image_number)
-                #draw_points(counter$image_number, input$length, input$direction)
                 if (counter$image_number == length(image_list)){
                   showNotification("Last image in set")
                 }
