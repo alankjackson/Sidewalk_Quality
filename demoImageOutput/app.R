@@ -867,6 +867,9 @@ shinyApp(
                 OldDF$Quality[mask] <<- input$quality
                 OldDF$Length[mask] <<- input$length
                 OldDF$Direction[mask] <<- input$direction
+                workingset$Quality[counter$image_number] <<- input$quality
+                workingset$Length[counter$image_number] <<- input$length
+                workingset$Direction[counter$image_number] <<- input$direction
                 OldDF$NewLon[mask] <<- workingset$NewLon[counter$image_number]
                 OldDF$NewLat[mask] <<- workingset$NewLat[counter$image_number]
                 OldDF$EndLon[mask] <<- workingset$EndLon[counter$image_number]
