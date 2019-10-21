@@ -54,6 +54,7 @@ saveRDS(OldDF, oldfile)
 
 OldDF <- OldDF %>% rename(NewLon=NewLong)
 
+OldDF <- OldDF %>% mutate(Quality=str_replace(Quality, "Acceptible", "Acceptable"))
 
 ```
 
