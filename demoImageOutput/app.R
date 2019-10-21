@@ -256,6 +256,28 @@ shinyApp(
         }
         
         #########################################
+        #########   Calc endpoints from length and direction
+        #########################################
+        
+        calc_endpoint <- function(i) { # i = counter$image_number
+          lat <- workingset$NewLat[i]
+          lon <- workingset$NewLon[i]
+          latlon <- len/340000. # distance in lat long space
+          newcoord <- case_when(
+            dir == "N" ~ list(lat+latlon, lon),
+            dir == "S" ~ list(lat-latlon, lon),
+            dir == "E" ~ list(lat, lon+latlon),
+            dir == "W" ~ list(lat, lon-latlon),
+            dir == "NE" ~ list(lat+latlon*0.707, lon+latlon*0.707),
+            dir == "NW" ~ list(lat+latlon*0.707, lon-latlon*0.707),
+            dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
+            dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
+          )
+          workingset$EndLon[i] <<- newcoord[[2]]
+          workingset$EndLat[i] <<- newcoord[[1]]
+        }
+        
+        #########################################
         #   Draw map - show marker at lat/long, and draw line of proper length
         #   and direction as chosen
         #   Use approximation of 1 degree = 340,000 feet
@@ -263,21 +285,24 @@ shinyApp(
         draw_points <- function(i, len, dir){
             lat <- workingset$NewLat[i]
             lon <- workingset$NewLon[i]
-            latlon <- len/340000. # distance in lat long space
-            newcoord <- case_when(
-                dir == "N" ~ list(lat+latlon, lon),
-                dir == "S" ~ list(lat-latlon, lon),
-                dir == "E" ~ list(lat, lon+latlon),
-                dir == "W" ~ list(lat, lon-latlon),
-                dir == "NE" ~ list(lat+latlon*0.707, lon+latlon*0.707),
-                dir == "NW" ~ list(lat+latlon*0.707, lon-latlon*0.707),
-                dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
-                dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
-            )
-            workingset$EndLon[i] <<- newcoord[[2]]
-            workingset$EndLat[i] <<- newcoord[[1]]
-            LonLine <- c(lon, newcoord[[2]])
-            LatLine <- c(lat, newcoord[[1]])
+            calc_endpoint(i)
+            #latlon <- len/340000. # distance in lat long space
+            #newcoord <- case_when(
+            #    dir == "N" ~ list(lat+latlon, lon),
+            #    dir == "S" ~ list(lat-latlon, lon),
+            #    dir == "E" ~ list(lat, lon+latlon),
+            #    dir == "W" ~ list(lat, lon-latlon),
+            #    dir == "NE" ~ list(lat+latlon*0.707, lon+latlon*0.707),
+            #    dir == "NW" ~ list(lat+latlon*0.707, lon-latlon*0.707),
+            #    dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
+            #    dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
+            #)
+            #workingset$EndLon[i] <<- newcoord[[2]]
+            #workingset$EndLat[i] <<- newcoord[[1]]
+            #LonLine <- c(lon, newcoord[[2]])
+            #LatLine <- c(lat, newcoord[[1]])
+            LonLine <- c(lon, workingset$EndLon[i])
+            LatLine <- c(lat, workingset$EndLat[i])
             nextfive <- logical(length=nrow(workingset))
             nextfive[(counter$image_number+1):(counter$image_number+6)] <- TRUE
             leafletProxy("LocalMap") %>% 
@@ -459,12 +484,14 @@ shinyApp(
           workingset$NewLon[workingset$id==pt_id] <<- newlon 
           workingset$NewLat[workingset$id==pt_id] <<- newlat
           #     Also need to move EndLon and EndLat
-          workingset$EndLon[workingset$id==pt_id] <<- newlon -
-            workingset$GPSLongitude[workingset$id==pt_id] +
-            workingset$EndLon[workingset$id==pt_id]
-          workingset$EndLat[workingset$id==pt_id] <<- newlat -
-            workingset$GPSLatitude[workingset$id==pt_id] +
-            workingset$EndLat[workingset$id==pt_id]
+          #workingset$EndLon[workingset$id==pt_id] <<- newlon -
+          #  workingset$GPSLongitude[workingset$id==pt_id] +
+          #  workingset$EndLon[workingset$id==pt_id]
+          #workingset$EndLat[workingset$id==pt_id] <<- newlat -
+          #  workingset$GPSLatitude[workingset$id==pt_id] +
+          #  workingset$EndLat[workingset$id==pt_id]
+          #   Recalculate the endpoint
+          calc_endpoint(which(workingset$id==pt_id))
         }
         
         ##############
