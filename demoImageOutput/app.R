@@ -259,7 +259,7 @@ shinyApp(
         #########   Calc endpoints from length and direction
         #########################################
         
-        calc_endpoint <- function(i) { # i = counter$image_number
+        calc_endpoint <- function(i, len, dir) { # i = counter$image_number
           lat <- workingset$NewLat[i]
           lon <- workingset$NewLon[i]
           latlon <- len/340000. # distance in lat long space
@@ -285,7 +285,7 @@ shinyApp(
         draw_points <- function(i, len, dir){
             lat <- workingset$NewLat[i]
             lon <- workingset$NewLon[i]
-            calc_endpoint(i)
+            calc_endpoint(i, len, dir)
             #latlon <- len/340000. # distance in lat long space
             #newcoord <- case_when(
             #    dir == "N" ~ list(lat+latlon, lon),
@@ -491,7 +491,10 @@ shinyApp(
           #  workingset$GPSLatitude[workingset$id==pt_id] +
           #  workingset$EndLat[workingset$id==pt_id]
           #   Recalculate the endpoint
-          calc_endpoint(which(workingset$id==pt_id))
+          len <- workingset$Length[workingset$id==pt_id]
+          dir <- workingset$Direction[workingset$id==pt_id]
+          print(paste("len, dir, i", len, dir, which(workingset$id==pt_id)))
+          calc_endpoint(which(workingset$id==pt_id), len, dir)
         }
         
         ##############
