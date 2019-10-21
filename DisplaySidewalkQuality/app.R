@@ -35,7 +35,7 @@ MapCenter <- c(-95.404606 , 29.797131)
 
 #   Colors for various qualities
 colorDF <- data.frame(
-     Quality = c("Good", "Acceptible", "Bushes",  "Gap", "Offset", "Shattered", "Obstructed",
+     Quality = c("Good", "Acceptable", "Bushes",  "Gap", "Offset", "Shattered", "Obstructed",
                 "Debris/Mud", "Gravel", "No Curb Cut", "Missing", "BadPict"),
      Colors = c("green", "greenyellow", "cyan2", "deepskyblue2", "dodgerblue2", "blue2",
             "yellow", "goldenrod2", "darkorange2", "magenta2", "red2", "black"),
@@ -71,7 +71,7 @@ shinyApp(
                #    Quality
                checkboxGroupInput("quality", label = "Sidewalk qualities to display",
                             choices = list("Good"="Good", 
-                                           "Acceptible"="Acceptible", 
+                                           "Acceptable"="Acceptable", 
                                            "Bushes"="Bushes", 
                                            "Gap"="Gap",  
                                            "Offset"="Offset", 
