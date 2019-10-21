@@ -26,9 +26,9 @@ DataLocation <- "https://www.ajackson.org/sidewalks/data/"
 #   Tibble database
 OldDF <- readRDS(gzcon(url(paste0(DataLocation, "/Photos.rds"))))
 
-#   Sort so that shortest paths plot last to avoid overplotting
+#   Sort so that shortest paths plot last to avoid overplotting and remove bad records
 
-OldDF <- OldDF %>% arrange(desc(Length))
+OldDF <- OldDF %>% arrange(desc(Length)) %>% filter(Quality != "Not Set")
 
 #  lng = -95.404606 , lat = 29.797131, zoom = 16
 MapCenter <- c(-95.404606 , 29.797131)
@@ -45,7 +45,7 @@ colorDF <- data.frame(
 )
 
 #   Build a full path in OldDF for each photo
-DataLocation <- "https://www.ajackson.org/sidewalks/data/"
+
 OldDF$SourceFile <- paste0(DataLocation, OldDF$SourceFile)
 
 #   Add color to OldDF for each record
@@ -120,11 +120,12 @@ shinyApp(
         ##################################
         #           Lines
         ##################################
-            observe({
+            draw_lines <- function() {
                 #   Polylines (done in a loop to keep them from connecting)
                 #   scale width of lines in concert with zoom scale
                 wgt <- max(2,floor(2*(input$LocalMap_zoom-init_zoom)+0.5) + init_weight)
                 #print(paste("weight:",wgt, init_weight, "zooms", input$LocalMap_zoom, init_zoom))
+                #print(paste("quality",input$quality))
                 if (!is.null(input$quality)){
                     leafletProxy("LocalMap") %>% 
                     clearShapes()  
@@ -145,10 +146,25 @@ shinyApp(
                     }
                 } 
                 else {
+                  #print("clear")
                     leafletProxy("LocalMap") %>% 
                     clearShapes()  
                 }
-            })
+            }
+        
+        ##################################
+        #  Zoom change
+        ##################################
+        observeEvent(input$LocalMap_zoom, {
+            draw_lines()
+         }, ignoreNULL=TRUE)
+        
+        ##################################
+        #  CheckBoxes
+        ##################################
+        observeEvent(input$quality, {
+            draw_lines()
+         }, ignoreNULL=FALSE, ignoreInit=TRUE)
             
         ##################################
         #  Select all and Unselect all
@@ -160,7 +176,8 @@ shinyApp(
                                          inputId = "quality", 
                                          selected = colorDF$Quality)
             }
-         }, ignoreNULL=TRUE)
+            draw_lines()
+         }, ignoreNULL=TRUE, ignoreInit=TRUE)
 
         #      Unselect    
         observeEvent(input$deselectAll, {
@@ -169,7 +186,8 @@ shinyApp(
                                          inputId = "quality", 
                                          selected = "")
             }
-         }, ignoreNULL=TRUE)
+            draw_lines()
+         }, ignoreNULL=TRUE, ignoreInit=TRUE)
             
     }
 )
