@@ -178,7 +178,7 @@ shinyApp(
                 tabPanel("Annotate", fluid=TRUE,value="AnnotateTab",
                    radioButtons("quality", label = "Sidewalk quality",
                                 choices = list("None selected" = "",
-                                               "Good"="Good", "Acceptible"="Acceptible",
+                                               "Good"="Good", "Acceptable"="Acceptable",
                                                "Bushes"="Bushes", 
                                                "Gap"="Gap",  "Offset"="Offset", 
                                                "Shattered"="Shattered", 

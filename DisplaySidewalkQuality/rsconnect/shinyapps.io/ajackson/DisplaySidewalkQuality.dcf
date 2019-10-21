@@ -1,0 +1,12 @@
+name: DisplaySidewalkQuality
+title: DisplaySidewalkQuality
+username:
+account: ajackson
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1290093
+bundleId: 2518939
+url: https://ajackson.shinyapps.io/DisplaySidewalkQuality/
+when: 1571622628.78161
+asMultiple: FALSE
+asStatic: FALSE
