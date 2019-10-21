@@ -1,0 +1,90 @@
+---
+title: "Database repairs"
+author: "Alan Jackson"
+date: "October 16, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+
+savepath <- "~/Dropbox/Rprojects/Sidewalk_Quality/Photos" # Processed Photos
+oldfile <- paste0(savepath, "/Photos.rds")
+OldDF <- readRDS(oldfile)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+
+#     Records to update
+foo = tribble(
+   ~id,              ~SourceFile ,
+   14, "IMG_20191008_105810.jpg", 
+   15, "IMG_20191008_105814.jpg",
+   16, "IMG_20191008_105829.jpg", 
+   17, "IMG_20191008_105833.jpg", 
+   18, "IMG_20191008_105845.jpg", 
+   19, "IMG_20191008_105855.jpg", 
+   20, "IMG_20191008_105859.jpg", 
+   21, "IMG_20191008_105904.jpg", 
+   22, "IMG_20191008_110011.jpg", 
+   23, "IMG_20191008_110039.jpg", 
+   24, "IMG_20191008_110045.jpg", 
+   25, "IMG_20191008_110049.jpg", 
+   26, "IMG_20191008_110105.jpg", 
+   27, "IMG_20191008_110110.jpg", 
+   28, "IMG_20191008_110115.jpg"
+   )
+
+for (source in foo$SourceFile) {
+  print(source)
+  OldDF[OldDF$SourceFile==source,]$EndLon <- OldDF[OldDF$SourceFile==source,]$NewLong 
+}
+
+saveRDS(OldDF, oldfile)
+
+```
+
+##    Change Long to Lon
+
+```{r longchange}
+
+OldDF <- OldDF %>% rename(NewLon=NewLong)
+
+
+```
+
+##    Straighten out lines
+
+Some endpoints are bogus, need to straighten them out
+
+```{r endpoint repair}
+for (i in 1:nrow(OldDF)) {
+  if(OldDF$Quality[i]=="Not Set"){next}
+            lat <- OldDF$NewLat[i]
+            lon <- OldDF$NewLon[i]
+            len <- OldDF$Length[i]
+            dir <- OldDF$Direction[i]
+            latlon <- len/340000. # distance in lat long space
+            newcoord <- case_when(
+                dir == "N" ~ list(lat+latlon, lon),
+                dir == "S" ~ list(lat-latlon, lon),
+                dir == "E" ~ list(lat, lon+latlon),
+                dir == "W" ~ list(lat, lon-latlon),
+                dir == "NE" ~ list(lat+latlon*0.707, lon+latlon*0.707),
+                dir == "NW" ~ list(lat+latlon*0.707, lon-latlon*0.707),
+                dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
+                dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
+            )
+            print(paste("OldLat - NewLat", i, OldDF$EndLat[i] - newcoord[[1]]))
+            print(paste("OldLon - NewLon", i, OldDF$EndLon[i] - newcoord[[2]]))
+            OldDF$EndLon[i] <- newcoord[[2]]
+            OldDF$EndLat[i] <- newcoord[[1]]
+}
+
+saveRDS(OldDF, oldfile)
+```
+
