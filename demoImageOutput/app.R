@@ -256,6 +256,22 @@ shinyApp(
         }
         
         #########################################
+        # Defining & initializing the reactiveValues object
+        #########################################
+        counter <- reactiveValues(image_number = 0) 
+        
+        #########################################
+        #       Reset controls - for when new image appears ##  delete me
+        #########################################
+        
+        resetControls <- function(){
+            session$resetBrush("brush")
+            brush <<- NULL
+            updateRadioButtons(session, "quality", selected = "")
+            updateNumericInput(session, "length", value = 50)
+        }
+        
+        #########################################
         #########   Calc endpoints from length and direction
         #########################################
         
@@ -470,8 +486,9 @@ shinyApp(
               updateCheckboxInput(session, "direction", value = workingset[counter$image_number,]$Direction)
           }
           else {updateCheckboxInput(session, "quality", value = "")}
-          #updateCheckboxInput(session, "length", value = workingset[counter$image_number,]$Length)
-          #updateCheckboxInput(session, "direction", value = workingset[counter$image_number,]$Direction)
+          #   Reset cropping
+          session$resetBrush("brush")
+          brush <<- NULL
         }
 
         #########################################
@@ -793,15 +810,6 @@ shinyApp(
         #  print(input$LocalMap_draw_all_features)
         #})
         
-        #       Reset controls - for when new image appears
-        
-        resetControls <- function(){
-            session$resetBrush("brush")
-            brush <<- NULL
-            updateRadioButtons(session, "quality", selected = "")
-            updateNumericInput(session, "length", value = 50)
-        }
-        
         ##############
         ### Ends   ###
         ##############
@@ -827,15 +835,11 @@ shinyApp(
          }, ignoreNULL=FALSE)
         
         
-        
-        # Defining & initializing the reactiveValues object
-        counter <- reactiveValues(image_number = 0) 
-        
         ###################
         ### Next button ###
         ###################
         observeEvent(input$Next, {
-            resetControls()
+            #resetControls()
             if (counter$image_number == length(image_list)){
               showNotification("Last image in set")
             }
@@ -848,7 +852,7 @@ shinyApp(
         ### Prev button ###
         ###################
         observeEvent(input$Prev, {
-            resetControls()
+            #resetControls()
             if (counter$image_number == 1){
               showNotification("First image in set")
             }
@@ -937,7 +941,7 @@ shinyApp(
                   }
                 }
                 #       Reset to defaults
-                resetControls()
+                #resetControls()
                 #       Go to Next
                 saved[counter$image_number] <<- TRUE # flag image as saved
                 counter$image_number <<- min(length(image_list), counter$image_number+1)
