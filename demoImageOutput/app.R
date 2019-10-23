@@ -47,7 +47,7 @@ workingset <- select(dat,
                SourceFile, DateTimeOriginal,
                GPSLongitude, GPSLatitude) %>% 
     arrange(DateTimeOriginal) %>% 
-    mutate(SourceFile=str_extract(SourceFile, "[A-Z0-9_]*.jpg$")) %>% # just filename
+    mutate(SourceFile=str_extract(SourceFile, "[lA-Z0-9_]*.jpg$")) %>% # just filename
     mutate(Quality="Not Set", Length=50, Direction="Not Set") %>% 
     mutate(EndLon=GPSLongitude, EndLat=GPSLatitude) %>% 
     mutate(NewLat=GPSLatitude, NewLon=GPSLongitude)
@@ -276,6 +276,9 @@ shinyApp(
         #########################################
         
         calc_endpoint <- function(i, len, dir) { # i = counter$image_number
+          #print(paste("---calc_endpoint---", i, len, dir, workingset$Direction[i]))
+          if (is.null(dir) | 
+              dir=="Not Set") {return()}
           lat <- workingset$NewLat[i]
           lon <- workingset$NewLon[i]
           latlon <- len/340000. # distance in lat long space
@@ -474,6 +477,7 @@ shinyApp(
         ####  Move to work on a new image
         #########################################
         GoToImage <- function(){
+          print("---go to image---")
           output$image <- image_prep(image_list[counter$image_number])
           draw_map(counter$image_number)
           draw_points(counter$image_number, input$length, input$direction)
@@ -824,15 +828,17 @@ shinyApp(
         ### length ###
         ##############
         observeEvent(input$length, {
+          print("---length---")
             draw_points(counter$image_number, input$length, input$direction)
-         }, ignoreNULL=FALSE)
+         }, ignoreNULL=FALSE, ignoreInit=TRUE)
         
         #################
         ### direction ###
         #################
         observeEvent(input$direction, {
+          print("---direction---")
             draw_points(counter$image_number, input$length, input$direction)
-         }, ignoreNULL=FALSE)
+         }, ignoreNULL=FALSE, ignoreInit=TRUE)
         
         
         ###################
@@ -942,6 +948,7 @@ shinyApp(
                 }
                 #       Reset to defaults
                 #resetControls()
+                updateCheckboxInput(session, "EditDB", value = FALSE)
                 #       Go to Next
                 saved[counter$image_number] <<- TRUE # flag image as saved
                 counter$image_number <<- min(length(image_list), counter$image_number+1)
