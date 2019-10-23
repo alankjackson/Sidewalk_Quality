@@ -89,3 +89,14 @@ for (i in 1:nrow(OldDF)) {
 saveRDS(OldDF, oldfile)
 ```
 
+##  Remove "Not Set" records
+
+```{r}
+
+OldDF <- OldDF %>% filter(Quality!="Not Set")
+
+saveRDS(OldDF, oldfile)
+
+```
+
+
