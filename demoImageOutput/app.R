@@ -41,42 +41,54 @@ savepath <- "~/Dropbox/Rprojects/Sidewalk_Quality/Photos" # Processed Photos
 
 #   Read files in Raw directory
 image_list <- list.files(path=rawpath , pattern = "*.jpg", full.names = TRUE)
-dat <- read_exif(image_list) # Read exif headers into data frame
-
-workingset <- select(dat,
-               SourceFile, DateTimeOriginal,
-               GPSLongitude, GPSLatitude) %>% 
-    arrange(DateTimeOriginal) %>% 
-    mutate(SourceFile=str_extract(SourceFile, "[lA-Z0-9_]*.jpg$")) %>% # just filename
-    mutate(Quality="Not Set", Length=50, Direction="Not Set") %>% 
-    mutate(EndLon=GPSLongitude, EndLat=GPSLatitude) %>% 
-    mutate(NewLat=GPSLatitude, NewLon=GPSLongitude)
-
-image_list <- paste0(rawpath,"/",workingset$SourceFile) # make sure image_list sort same as workingset
-
-#       Is there an old tibble?
 
 oldfile <- paste0(savepath, "/Photos.rds")
-if (file.exists(oldfile)){
-    OldDF <- readRDS(oldfile)
-    } else 
-{
-    OldDF <- tibble(SourceFile=character(),
-                    DateTimeOriginal=character(),
-                    GPSLongitude=numeric(),
-                    GPSLatitude=numeric(),
-                    Quality=character(),
-                    Length=numeric(),
-                    Direction=character(),
-                    EndLon=numeric(),
-                    EndLat=numeric(),
-                    NewLat=numeric(),
-                    NewLon=numeric())
-}
 
-#   Join new data to old file - but only new records
+#   If directory is empty, assume want to edit old data
 
-OldDF <- bind_rows(OldDF, anti_join(workingset, OldDF, by="SourceFile"))
+if (identical(image_list, character(0))) {
+  OldDF <- readRDS(oldfile)
+  workingset <- OldDF
+  image_list <- paste0(savepath,"/",workingset$SourceFile) 
+  
+} else {
+  dat <- read_exif(image_list) # Read exif headers into data frame
+  
+  workingset <- select(dat,
+                 SourceFile, DateTimeOriginal,
+                 GPSLongitude, GPSLatitude) %>% 
+      arrange(DateTimeOriginal) %>% 
+      mutate(SourceFile=str_extract(SourceFile, "[lA-Z0-9_]*.jpg$")) %>% # just filename
+      mutate(Quality="Not Set", Length=50, Direction="Not Set") %>% 
+      mutate(EndLon=GPSLongitude, EndLat=GPSLatitude) %>% 
+      mutate(NewLat=GPSLatitude, NewLon=GPSLongitude)
+  
+  image_list <- paste0(rawpath,"/",workingset$SourceFile) # make sure image_list sort same as workingset
+  
+  #       Is there an old tibble?
+  
+  if (file.exists(oldfile)){
+      OldDF <- readRDS(oldfile)
+      } else 
+  {
+      OldDF <- tibble(SourceFile=character(),
+                      DateTimeOriginal=character(),
+                      GPSLongitude=numeric(),
+                      GPSLatitude=numeric(),
+                      Quality=character(),
+                      Length=numeric(),
+                      Direction=character(),
+                      EndLon=numeric(),
+                      EndLat=numeric(),
+                      NewLat=numeric(),
+                      NewLon=numeric())
+  }
+  
+  #   Join new data to old file - but only new records
+  
+  OldDF <- bind_rows(OldDF, anti_join(workingset, OldDF, by="SourceFile"))
+
+} # end of else
 
 #   Add an ID field to workingset
 
@@ -106,6 +118,9 @@ workingset$NewLon <- OldDF$NewLon[mask]
 workingset$NewLat <- OldDF$NewLat[mask]
 
 SavePending<<-FALSE # flag to prevent leaving a tab with unfinished business
+
+zoom <- 20
+Aligned <- FALSE  # flag to prevent applying alignment before alignment is done
 
 #######################################################
 #   Javascript for removing polylines
@@ -302,24 +317,11 @@ shinyApp(
         #   Use approximation of 1 degree = 340,000 feet
         #########################################
         draw_points <- function(i, len, dir){
+          print("==== draw points ====")
             lat <- workingset$NewLat[i]
             lon <- workingset$NewLon[i]
             calc_endpoint(i, len, dir)
-            #latlon <- len/340000. # distance in lat long space
-            #newcoord <- case_when(
-            #    dir == "N" ~ list(lat+latlon, lon),
-            #    dir == "S" ~ list(lat-latlon, lon),
-            #    dir == "E" ~ list(lat, lon+latlon),
-            #    dir == "W" ~ list(lat, lon-latlon),
-            #    dir == "NE" ~ list(lat+latlon*0.707, lon+latlon*0.707),
-            #    dir == "NW" ~ list(lat+latlon*0.707, lon-latlon*0.707),
-            #    dir == "SE" ~ list(lat-latlon*0.707, lon+latlon*0.707),
-            #    dir == "SW" ~ list(lat-latlon*0.707, lon-latlon*0.707)
-            #)
-            #workingset$EndLon[i] <<- newcoord[[2]]
-            #workingset$EndLat[i] <<- newcoord[[1]]
-            #LonLine <- c(lon, newcoord[[2]])
-            #LatLine <- c(lat, newcoord[[1]])
+
             LonLine <- c(lon, workingset$EndLon[i])
             LatLine <- c(lat, workingset$EndLat[i])
             nextfive <- logical(length=nrow(workingset))
@@ -504,13 +506,7 @@ shinyApp(
           print(paste(workingset$NewLat[workingset$id==pt_id], newlat))
           workingset$NewLon[workingset$id==pt_id] <<- newlon 
           workingset$NewLat[workingset$id==pt_id] <<- newlat
-          #     Also need to move EndLon and EndLat
-          #workingset$EndLon[workingset$id==pt_id] <<- newlon -
-          #  workingset$GPSLongitude[workingset$id==pt_id] +
-          #  workingset$EndLon[workingset$id==pt_id]
-          #workingset$EndLat[workingset$id==pt_id] <<- newlat -
-          #  workingset$GPSLatitude[workingset$id==pt_id] +
-          #  workingset$EndLat[workingset$id==pt_id]
+
           #   Recalculate the endpoint
           len <- workingset$Length[workingset$id==pt_id]
           dir <- workingset$Direction[workingset$id==pt_id]
@@ -628,6 +624,7 @@ shinyApp(
           clearAlign()
           pt_ids <<- c()
           SavePending<<-FALSE
+          Aligned <<- FALSE
          }, ignoreNULL=TRUE)
         
         #########################
@@ -645,6 +642,7 @@ shinyApp(
                                group = "projected", 
                                radius=3, opacity=1, color="#0000FF")
           }
+          Aligned <<- TRUE
         }, ignoreNULL=TRUE)
         
         ##########################
@@ -652,6 +650,10 @@ shinyApp(
         ##########################
         observeEvent(input$ApplyAlign, {
           print("--- apply ---")
+          if (!Aligned) {
+              showNotification("Must Align before Applying")
+            return()
+          }
           for (pt in c(pt_ids[1]:pt_ids[length(pt_ids)])) {
             newpt <- ProjPt(pt, AlignLine) # id = id for point, endpts = endpoints of line
             MovePoint(pt, newpt[2], newpt[1] )
@@ -660,6 +662,7 @@ shinyApp(
           draw_mapedit("Align")
           draw_ends() 
           SavePending<<-TRUE
+          Aligned <<- FALSE
         }, ignoreNULL=TRUE)
         ############################
         ### RevertCurrent button ###
@@ -671,6 +674,7 @@ shinyApp(
           workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$NewLon <<- 
                      workingset[workingset$id %in% c(pt_ids[1]:pt_ids[length(pt_ids)]),]$GPSLongitude
           SavePending<<-FALSE
+          Aligned <<- FALSE
           draw_map(counter$image_number)
           draw_mapedit("Align")
         }, ignoreNULL=TRUE)
@@ -681,6 +685,7 @@ shinyApp(
           workingset$NewLon <<- workingset$GPSLongitude
           workingset$NewLat <<- workingset$GPSLatitude
           SavePending<<-FALSE
+          Aligned <<- FALSE
           draw_map(counter$image_number)
           draw_mapedit("Align")
           
@@ -699,15 +704,17 @@ shinyApp(
           for (i in pt_ids[1]:pt_ids[length(pt_ids)]) {
             maskWork <- workingset$id == i
             maskOld <- OldDF$SourceFile==workingset[maskWork,]$SourceFile
-            print(paste("--- SaveAlign ---", i, sum(maskOld), sum(maskWork) ))
-            OldDF$EndLon[maskOld] <- workingset$EndLon[maskWork]
-            OldDF$EndLat[maskOld] <- workingset$EndLat[maskWork]
-            OldDF$NewLon[maskOld] <- workingset$NewLon[maskWork]
-            OldDF$NewLat[maskOld] <- workingset$NewLat[maskWork]
+            #print(paste("--- SaveAlign ---", i, sum(maskOld), sum(maskWork) ))
+            OldDF$EndLon[maskOld] <<- workingset$EndLon[maskWork]
+            OldDF$EndLat[maskOld] <<- workingset$EndLat[maskWork]
+            OldDF$NewLon[maskOld] <<- workingset$NewLon[maskWork]
+            OldDF$NewLat[maskOld] <<- workingset$NewLat[maskWork]
           }
           #   Write OldDF out to permanent file
+          print(paste("--- SaveAlign ---", oldfile))
           saveRDS(OldDF, oldfile)
           #   Reset flags
+          clearAlign()
           pt_ids <<- c()
           SavePending<<-FALSE
         }, ignoreNULL=TRUE)  
@@ -777,10 +784,10 @@ shinyApp(
           maskWork <- workingset$id == pt_ids[1]
           maskOld <- OldDF$SourceFile==workingset[maskWork,]$SourceFile
           print(paste("--- SaveMove ---", pt_ids[1], sum(maskOld), sum(maskWork) ))
-          OldDF$EndLon[maskOld] <- workingset$EndLon[maskWork]
-          OldDF$EndLat[maskOld] <- workingset$EndLat[maskWork]
-          OldDF$NewLon[maskOld] <- workingset$NewLon[maskWork]
-          OldDF$NewLat[maskOld] <- workingset$NewLat[maskWork]
+          OldDF$EndLon[maskOld] <<- workingset$EndLon[maskWork]
+          OldDF$EndLat[maskOld] <<- workingset$EndLat[maskWork]
+          OldDF$NewLon[maskOld] <<- workingset$NewLon[maskWork]
+          OldDF$NewLat[maskOld] <<- workingset$NewLat[maskWork]
           #   Write OldDF out to permanent file
           saveRDS(OldDF, oldfile)
           #   Reset flags
