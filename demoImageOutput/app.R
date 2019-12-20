@@ -202,7 +202,7 @@ shinyApp(
                                                "Gravel"="Gravel", 
                                                "No Curb Cut"="No Curb Cut", 
                                                "Missing"="Missing",
-                                               "BadPict"="BadPict")
+                                               "Design Fail"="Design Fail")
                                 ),
                    numericInput("length", "Estimated length in feet",
                                min = 0, max = 1000, step=5,
