@@ -99,4 +99,63 @@ saveRDS(OldDF, oldfile)
 
 ```
 
+##  Delete specific records
+
+```{r}
+
+#records <- paste(c("5_101349", "5_101344", "5_101408", "5_101411"),collapse="|")
+
+#records <- paste(c("135706", "135626"),collapse="|")
+
+records <- paste(c("IMG_20191217_123149.jpg",
+                   "IMG_20191217_125439.jpg",
+                   "IMG_20191217_125448.jpg",
+                   "IMG_20191217_125457.jpg",
+                   "IMG_20191217_125832.jpg"
+                   ),collapse="|")
+
+OldDF$SourceFile[grepl(records, OldDF$SourceFile)]
+
+OldDF <- OldDF %>% filter(!grepl(records, SourceFile))
+
+saveRDS(OldDF, oldfile)
+
+```
+
+##  Update records for gutter - failure by design
+
+```{r}
+
+records <- paste(c("IMG_20191115_104531", 
+                   "IMG_20191115_104447", 
+                   "IMG_20191115_101710", 
+                   "IMG_20191115_101659",
+                   "IMG_20191008_110423",
+                   "IMG_20191008_110619",
+                   "IMG_20191008_110615",
+                   "IMG_20191120_095603",
+                   "IMG_20191120_100105",
+                   "IMG_20191120_102719",
+                   "IMG_20191006_140123",
+                   "IMG_20191119_113954",
+                   "IMG_20191118_115527",
+                   "IMG_20191007_101827",
+                   "IMG_20191118_120049",
+                   "00000IMG_00000_BURST20191022120826266_COVER",
+                   "IMG_20191120_101415",
+                   "IMG_20191204_104554",
+                   "IMG_20191204_104541",
+                   "IMG_20191204_104519",
+                   "IMG_20191119_121535",
+                   "IMG_20191119_115437"
+                   ),collapse="|")
+
+
+OldDF$Quality[grepl(records, OldDF$SourceFile)] <- "Design Fail"
+
+saveRDS(OldDF, oldfile)
+
+```
+
+
 
