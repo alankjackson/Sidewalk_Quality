@@ -36,11 +36,11 @@ MapCenter <- c(-95.404606 , 29.797131)
 #   Colors for various qualities
 colorDF <- data.frame(
      Quality = c("Good", "Acceptable", "Bushes",  "Gap", "Offset", "Shattered", "Obstructed",
-                "Debris/Mud", "Gravel", "No Curb Cut", "Missing", "BadPict"),
+                "Debris/Mud", "Gravel", "Design Fail", "No Curb Cut", "Missing"),
      Colors = c("green", "greenyellow", "cyan2", "deepskyblue2", "dodgerblue2", "blue2",
             "yellow", "goldenrod2", "darkorange2", "magenta2", "red2", "black"),
      Codes=c("#008000", "#ADFF2F", "#00eeee", "#00b2ee", "#1c86ee", "#0000ee",
-             "#ffff00", "#eeb422", "#ee7600", "#ee00ee", "#ee0000", "#000000"),
+             "#ffff00", "#eeb422", "#9933ff", "#eeb600", "#ee00ee", "#ee0000"),
      stringsAsFactors = FALSE
 )
 
@@ -79,9 +79,9 @@ shinyApp(
                                            "Obstructed"="Obstructed", 
                                            "Debris/Mud"="Debris/Mud", 
                                            "Gravel"="Gravel", 
+                                           "Design Fail"="Design Fail",
                                            "No Curb Cut"="No Curb Cut", 
-                                           "Missing"="Missing",
-                                           "BadPict"="BadPict"
+                                           "Missing"="Missing"
                                            ),
                             selected = colorDF$Quality),
                #    Select or unselect all
@@ -100,7 +100,7 @@ shinyApp(
 #####################################################
 
     server <- function(input, output, session) {
-
+      
             #       This bit won't change
         ##################################
         #           Basemap
