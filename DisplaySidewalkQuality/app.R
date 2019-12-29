@@ -108,6 +108,7 @@ shinyApp(
       quality <- reactive(input$quality)
       quality_d <- quality %>%
         debounce(1000)     
+      
             #       This bit won't change
         ##################################
         #           Basemap
@@ -130,16 +131,11 @@ shinyApp(
             draw_lines <- function() {
                 #   Polylines (done in a loop to keep them from connecting)
                 #   scale width of lines in concert with zoom scale
-                #wgt <- max(2,floor(2*(input$LocalMap_zoom-init_zoom)+0.5) + init_weight)
                 wgt <- max(2,floor(2*(zoom_d()-init_zoom)+0.5) + init_weight)
-                #print(paste("weight:",wgt, init_weight, "zooms", input$LocalMap_zoom, init_zoom))
-                #print(paste("quality",input$quality))
-                #if (!is.null(input$quality)){
                 if (!is.null(quality_d())){
                     leafletProxy("LocalMap") %>% 
                     clearShapes()  
                     for (i in 1:nrow(OldDF)){
-                        #if (OldDF[i,]$Quality %in% input$quality) {
                         if (OldDF[i,]$Quality %in% quality_d()) {
                             leafletProxy("LocalMap") %>% 
                               addPolylines(
@@ -156,7 +152,6 @@ shinyApp(
                     }
                 } 
                 else {
-                  #print("clear")
                     leafletProxy("LocalMap") %>% 
                     clearShapes()  
                 }
@@ -165,7 +160,6 @@ shinyApp(
         ##################################
         #  Zoom change
         ##################################
-        #observeEvent(input$LocalMap_zoom, {
         observeEvent(zoom_d(), {
             draw_lines()
          }, ignoreNULL=TRUE)
@@ -173,7 +167,6 @@ shinyApp(
         ##################################
         #  CheckBoxes
         ##################################
-        #observeEvent(input$quality, {
         observeEvent(quality_d(), {
             draw_lines()
          }, ignoreNULL=FALSE, ignoreInit=TRUE)
