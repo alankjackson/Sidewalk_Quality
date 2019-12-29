@@ -38,9 +38,9 @@ colorDF <- data.frame(
      Quality = c("Good", "Acceptable", "Bushes",  "Gap", "Offset", "Shattered", "Obstructed",
                 "Debris/Mud", "Gravel", "Design Fail", "No Curb Cut", "Missing"),
      Colors = c("green", "greenyellow", "cyan2", "deepskyblue2", "dodgerblue2", "blue2",
-            "yellow", "goldenrod2", "darkorange2", "magenta2", "red2", "black"),
+            "yellow", "goldenrod2", "darkorange2", "purple", "magenta2", "red2"),
      Codes=c("#008000", "#ADFF2F", "#00eeee", "#00b2ee", "#1c86ee", "#0000ee",
-             "#ffff00", "#eeb422", "#9933ff", "#eeb600", "#ee00ee", "#ee0000"),
+             "#ffff00", "#eeb422", "#9933ff", "#6300ee", "#ee00ee", "#ee0000"),
      stringsAsFactors = FALSE
 )
 
@@ -100,7 +100,14 @@ shinyApp(
 #####################################################
 
     server <- function(input, output, session) {
-      
+      #     Debounce zoom
+      zoom <- reactive(input$LocalMap_zoom)
+      zoom_d <- zoom %>%
+        debounce(500)     
+      #     Debounce checkboxes
+      quality <- reactive(input$quality)
+      quality_d <- quality %>%
+        debounce(1000)     
             #       This bit won't change
         ##################################
         #           Basemap
@@ -123,14 +130,17 @@ shinyApp(
             draw_lines <- function() {
                 #   Polylines (done in a loop to keep them from connecting)
                 #   scale width of lines in concert with zoom scale
-                wgt <- max(2,floor(2*(input$LocalMap_zoom-init_zoom)+0.5) + init_weight)
+                #wgt <- max(2,floor(2*(input$LocalMap_zoom-init_zoom)+0.5) + init_weight)
+                wgt <- max(2,floor(2*(zoom_d()-init_zoom)+0.5) + init_weight)
                 #print(paste("weight:",wgt, init_weight, "zooms", input$LocalMap_zoom, init_zoom))
                 #print(paste("quality",input$quality))
-                if (!is.null(input$quality)){
+                #if (!is.null(input$quality)){
+                if (!is.null(quality_d())){
                     leafletProxy("LocalMap") %>% 
                     clearShapes()  
                     for (i in 1:nrow(OldDF)){
-                        if (OldDF[i,]$Quality %in% input$quality) {
+                        #if (OldDF[i,]$Quality %in% input$quality) {
+                        if (OldDF[i,]$Quality %in% quality_d()) {
                             leafletProxy("LocalMap") %>% 
                               addPolylines(
                                 lat=c(OldDF[i,]$NewLat, OldDF[i,]$EndLat),
@@ -155,14 +165,16 @@ shinyApp(
         ##################################
         #  Zoom change
         ##################################
-        observeEvent(input$LocalMap_zoom, {
+        #observeEvent(input$LocalMap_zoom, {
+        observeEvent(zoom_d(), {
             draw_lines()
          }, ignoreNULL=TRUE)
         
         ##################################
         #  CheckBoxes
         ##################################
-        observeEvent(input$quality, {
+        #observeEvent(input$quality, {
+        observeEvent(quality_d(), {
             draw_lines()
          }, ignoreNULL=FALSE, ignoreInit=TRUE)
             
