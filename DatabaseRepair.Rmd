@@ -111,7 +111,26 @@ records <- paste(c("IMG_20191217_123149.jpg",
                    "IMG_20191217_125439.jpg",
                    "IMG_20191217_125448.jpg",
                    "IMG_20191217_125457.jpg",
-                   "IMG_20191217_125832.jpg"
+                   "IMG_20200121_141436",
+                   "IMG_20200121_141431",
+                   "IMG_20200121_141423",
+                   "IMG_20200121_141414",
+                   "IMG_20200121_141406",
+                   "IMG_20200121_141351",
+                   "IMG_20200121_141436",
+                   "IMG_20200121_141347",
+                   "IMG_20200124_110805",
+                   "IMG_20200124_110810",
+                   "IMG_20200124_110901",
+                   "IMG_20200124_110905",
+                   "IMG_20200124_111113",
+                   "IMG_20200124_111124",
+                   "IMG_20200124_111226",
+                   "IMG_20200121_141316",
+                   "IMG_20191217_125832.jpg",
+                   "20200116135746619_COVER.jpg",
+                   "BURST20200107115925833_COVER",
+                   "BURST20200107115927260_COVER"
                    ),collapse="|")
 
 OldDF$SourceFile[grepl(records, OldDF$SourceFile)]
@@ -155,6 +174,35 @@ OldDF$Quality[grepl(records, OldDF$SourceFile)] <- "Design Fail"
 
 saveRDS(OldDF, oldfile)
 
+```
+
+##   What is average GPS error?
+
+```{r gps error}
+
+distances <- OldDF %>% 
+   mutate(distance=sqrt((GPSLongitude-NewLon)**2 +
+                        (GPSLatitude -NewLat)**2)*
+                     363688) %>% 
+   mutate(Direction=ifelse(Direction %in% c("N","S"), "NS", "EW")) %>% 
+   mutate(Direction=as.factor(Direction))
+
+distances %>% 
+   filter(distance<100) %>% 
+   ggplot() +
+   geom_histogram(aes(x=distance))+
+   labs(x="Distance in Feet",
+        title="Distance Adjustments made to GPS Locations")
+
+distances %>% 
+   filter(distance<100) %>% 
+   ggplot() +
+   geom_histogram(aes(x=distance))+
+   facet_grid(cols=vars(Direction)) +
+   labs(x="Distance in Feet",
+        title="Distance Adjustments made to GPS Locations")
+
+summary(distances)
 ```
 
 
